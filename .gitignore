@@ -1,0 +1,27 @@
+# Зависимостей нет (vanilla JS, без сборщика)
+node_modules/
+
+# Firebase CLI локальные файлы
+.firebase/
+firebase-debug.log
+firebase-debug.*.log
+.firebaserc
+firebase.json
+
+# Секреты и ключи
+.env
+.env.*
+*.key
+serviceAccount*.json
+google-credentials*.json
+
+# Инструменты и ОС
+.DS_Store
+Thumbs.db
+*.log
+npm-debug.log*
+
+# Временные файлы
+tmp/
+*.tmp
+*.bak

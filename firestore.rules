@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActive() {
+      return signedIn() && me().status == 'approved' && me().active == true;
+    }
+
+    function isStaff() {
+      return isActive() && me().role in ['owner', 'admin', 'manager', 'operator'];
+    }
+
+    function isOwnerOrAdmin() {
+      return isActive() && me().role in ['owner', 'admin'];
+    }
+
+    // Заявки: читают все активные сотрудники, пишут owner/admin/manager
+    // + назначенные (worker/helpers) могут точечно обновлять свои поля.
+    match /orders/{orderId} {
+      allow read: if isActive();
+      allow create: if isStaff();
+      allow update: if isOwnerOrAdmin() || me().role in ['manager', 'operator'];
+      allow delete: if isOwnerOrAdmin();
+    }
+
+    // Пользователи: свой документ читают/пишут все; реестр — staff;
+    // роли и статус меняет только owner/admin.
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isStaff());
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && (
+        request.auth.uid == userId ||
+        (isOwnerOrAdmin() && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name', 'phone', 'role', 'roles', 'share', 'status', 'active', 'profile']))
+      );
+      allow delete: if signedIn() && me().role == 'owner';
+    }
+
+    // Контрагенты
+    match /clients/{clientId} {
+      allow read, create, update: if isActive();
+      allow delete: if isOwnerOrAdmin();
+    }
+
+    // События/уведомления: отправитель создаёт, получатели отмечают прочтение.
+    match /events/{eventId} {
+      allow read: if signedIn() && (request.auth.uid in resource.data.to || isStaff());
+      allow create: if isActive();
+      allow update: if isActive();
+      allow delete: if isOwnerOrAdmin();
+    }
+
+    // Личный график сотрудника — только сам сотрудник и owner/admin/manager.
+    match /sched/{userId} {
+      allow read, write: if signedIn() && (
+        request.auth.uid == userId || isOwnerOrAdmin() || me().role == 'manager'
+      );
+    }
+
+    // Настройки организации — читают все активные, пишет owner/admin.
+    match /settings/{orgId} {
+      allow read: if isActive();
+      allow write: if isOwnerOrAdmin();
+    }
+  }
+}
