@@ -148,21 +148,18 @@ function doLogin(phone, code) {
 
 // --- Заглушки экранов (наполняются на следующих этапах) ---
 
-function renderOrders() {
-  const all = DB.orders || [];
-  const canSeeAll = can('orders_view_all');
-  const mine = all.filter(function (o) { return isAssignedToMe(o); });
-  const visible = canSeeAll ? all : mine;
-  return '<h2>Список заявок</h2>' +
-    '<p class="muted">Этап 5: список, фильтры, карточки.</p>' +
-    '<p>Всего заявок: <b>' + visible.length + '</b>' +
-    (canSeeAll ? ' (все)' : ' (мои)') +
-    ' · в базе: ' + all.length + '</p>';
-}
-
+// Экран orders/order реализованы в ui-orders.js (грузится после core.js),
+// поэтому здесь ленивые обёртки: на момент вызова функции уже определены.
 const S = {
   login: renderLogin,
-  orders: renderOrders,
+  orders: function () {
+    if (typeof renderOrdersList === 'function') return renderOrdersList();
+    return '<h2>📋 Заявки</h2><p class="muted">Модуль UI ещё не загружен.</p>';
+  },
+  order: function () {
+    if (typeof renderOrderCard === 'function') return renderOrderCard(state.orderId);
+    return '<h2>Заявка</h2><p class="muted">Модуль UI ещё не загружен.</p>';
+  },
   clients: function () { return '<h2>Контрагенты</h2>'; },
   overdue: function () { return '<h2>Просроченные</h2>'; },
   calendar: function () { return '<h2>Календарь</h2>'; },
@@ -173,6 +170,20 @@ const S = {
   create: function () { return '<h2>Новая заявка</h2>'; },
   profile: function () { return '<h2>Профиль</h2>'; }
 };
+
+// --- Модалки: оверлей поверх текущего экрана (#modal-container в index.html) ---
+
+function showModal(html) {
+  const host = document.getElementById('modal-container');
+  if (!host) { toast('Модалки недоступны', true); return; }
+  host.innerHTML =
+    '<div class="overlay" data-modal-overlay><div class="modal">' + html + '</div></div>';
+}
+
+function closeModal() {
+  const host = document.getElementById('modal-container');
+  if (host) host.innerHTML = '';
+}
 
 // --- Toast ---
 
@@ -206,7 +217,12 @@ document.addEventListener('click', function (ev) {
   if (backBtn) { goBack(); return; }
 });
 
-// --- Старт: каркас гарантирует DOM выше скриптов, поэтому стартуем сразу.
+// --- Старт: все модули подключены обычными <script>, ждём готовности DOM
+// (ui-orders.js идёт после core.js, поэтому первый render откладывается).
 
 if (state.role === null) state.screen = 'login';
-render();
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', render);
+} else {
+  render();
+}

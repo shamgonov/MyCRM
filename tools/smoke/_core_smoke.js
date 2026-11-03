@@ -18,6 +18,9 @@ globalThis.document = {
 loadModule('app/db.js');
 loadModule('app/auth.js');
 loadModule('app/core.js');
+loadModule('app/gates.js');     // renderOrdersList требует canViewOrder
+loadModule('app/orders.js');    // STATUS_TRANSITIONS для таба статуса
+loadModule('app/ui-orders.js'); // экраны orders/order (Этап 4)
 
 // --- state: стартовый контракт
 assert.eq(state.screen, 'login', 'state.screen стартует с login');
@@ -94,7 +97,7 @@ assert.eq(navEl.innerHTML, '', 'до входа навигация пуста (�
 
 login('admin', 'Владелец');
 render();
-assert(appEl.innerHTML.indexOf('Список заявок') >= 0, 'render(orders) — заглушка списка');
+assert(appEl.innerHTML.indexOf('📋 Заявки') >= 0, 'render(orders) выводит список заявок (Этап 4)');
 assert(navEl.innerHTML.length > 0, 'после входа nav заполнен');
 assert(navEl.innerHTML.indexOf('Профиль') >= 0, 'admin-навигация содержит Профиль');
 assert(navEl.innerHTML.indexOf('active') >= 0, 'активный пункт подсвечен');

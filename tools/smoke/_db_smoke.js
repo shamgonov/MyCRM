@@ -14,8 +14,23 @@ globalThis.localStorage = (function () {
 loadModule('app/db.js');
 
 assert(typeof DB === 'object' && DB !== null, 'DB инициализирован в load()');
-assert.eq(DB.seq, 0, 'defaultData: seq=0');
-assert(Array.isArray(DB.orders) && DB.orders.length === 0, 'defaultData: orders=[]');
+
+// Состав defaultData() (с Этапа 4 load() сеет мок-данные, проверяем структуру напрямую).
+const dd = defaultData();
+assert.eq(dd.seq, 0, 'defaultData: seq=0');
+assert(Array.isArray(dd.orders) && dd.orders.length === 0, 'defaultData: orders=[]');
+
+// Сид мок-данных в load(): 4 заявки, «своя» у Мастера, просрочка и «сегодня».
+assert.eq(DB.orders.length, 4, 'seedMockData: 4 демо-заявки');
+assert.eq(DB.seq, 4, 'seedMockData: seq = 4');
+assert(DB.orders.some(function (o) { return o.worker === 'Мастер' && o.date === localToday(); }),
+  'seedMockData: есть «моя» заявка на сегодня');
+assert(DB.orders.some(function (o) {
+  return o.status === 'new' && o.date < localToday();
+}), 'seedMockData: есть просрочка');
+assert(DB.orders.every(function (o) { return typeof o.id === 'number' && o.history.length >= 1; }),
+  'seedMockData: у всех есть id и история');
+
 assert(Array.isArray(DB.users) && DB.users.length === 0, 'defaultData: users=[]');
 assert(Array.isArray(DB.clients) && DB.clients.length === 0, 'defaultData: clients=[]');
 assert(Array.isArray(DB.templates), 'defaultData: templates=[]');
@@ -67,7 +82,7 @@ DB = null;
 load();
 assert.eq(DB.seq, 42, 'load() читает сохранённое из localStorage');
 
-// Битый JSON в localStorage — fallback на defaultData
+// Битый JSON в localStorage — fallback на defaultData + сид мок-данных (Этап 4).
 localStorage.setItem('crm2_db', '{oops');
 load();
-assert.eq(DB.seq, 0, 'load() с битым JSON → defaultData');
+assert.eq(DB.seq, 4, 'load() с битым JSON → defaultData + seedMockData');

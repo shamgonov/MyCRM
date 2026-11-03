@@ -23,6 +23,12 @@
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
   --nav-h: 56px;
+
+  /* Алиасы для UI-модулей (этап 4+) */
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--bg-elev);
+  --text-primary: var(--text);
+  --text-secondary: var(--muted);
 }
 
 * { box-sizing: border-box; }
@@ -126,7 +132,54 @@ input:focus, select:focus, textarea:focus {
   border-radius: var(--radius-sm);
   padding: 10px 12px;
 }
-.list-item.mine { border-color: var(--accent); }
+.list-item.mine {
+  border-color: var(--accent);
+  background: rgba(251, 191, 36, 0.1); /* «моя» заявка — слегка желтоватая */
+}
+
+/* --- Чипы-фильтры --- */
+.chips { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; }
+.chip {
+  border: 1px solid var(--line);
+  background: var(--card-2);
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+  font-weight: 700;
+}
+
+/* --- Табы карточки заявки --- */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 10px 0; }
+.tab-btn {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* --- Шапка карточки --- */
+.head-row { display: flex; align-items: center; gap: 8px; }
+.head-row h2 { flex: 1; margin: 0; }
+
+/* --- Смета --- */
+.est-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); }
+.est-row.done { text-decoration: line-through; color: var(--muted); }
+.est-total { display: flex; justify-content: space-between; font-weight: 700; padding: 10px 0 0; }
+.info-block { margin: 0 0 10px; }
+.info-block h4 { margin: 0 0 6px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.4px; }
 
 /* --- Нижняя навигация --- */
 #nav {

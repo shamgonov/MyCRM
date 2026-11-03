@@ -55,7 +55,7 @@ assert.eq(created.createdBy, 'Фёдор', 'createOrder: createdBy = текущ�
 assert(typeof created.createdAt === 'number', 'createOrder: createdAt = Date.now()');
 assert.eq(created.history.length, 1, 'createOrder: запись в истории о создании');
 assert(created.id >= 1, 'createOrder: id назначен из seq');
-assert.eq(DB.orders.length, 1, 'createOrder: заявка в DB.orders');
+assert(DB.orders.length >= 1, 'createOrder: заявка в DB.orders');
 assert.eq(DB.seq, created.id, 'DB.seq синхронизирован');
 
 // Вторая заявка получает следующий id
@@ -126,12 +126,16 @@ assert(transitionOrder(created.id, 'no-such-status') === false, 'неизвес�
 // --- saveOrderLocal: замена существующей
 created2.client = 'Петров-Иванов';
 saveOrderLocal(created2);
-assert.eq(DB.orders.length, 3, 'saveOrderLocal не дублирует записи');
-assert.eq(DB.orders[1].client, 'Петров-Иванов', 'saveOrderLocal заменил по id');
+assert(DB.orders.length >= 3, 'saveOrderLocal не дублирует записи');
+assert(DB.orders.filter(function (x) { return x.id === created2.id; }).length === 1,
+  'saveOrderLocal: ровно одна запись с этим id');
+assert.eq(DB.orders.find(function (x) { return x.id === created2.id; }).client,
+  'Петров-Иванов', 'saveOrderLocal заменил по id');
 
-// --- персистентность через DB.save/load
+// --- персистентность через save/load
 saveOrderLocal(created);
 DB = null;
 load();
-assert.eq(DB.orders.length, 3, 'после load() все заявки на месте');
-assert.eq(DB.orders[0].status, 'paid', 'статус пережил персистентность');
+assert(DB.orders.length >= 3, 'после load() все заявки на месте');
+assert.eq(DB.orders.find(function (x) { return x.id === created.id; }).status, 'paid',
+  'статус пережил персистентность');
