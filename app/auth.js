@@ -85,6 +85,9 @@ function unionPermsFor(roleIds) {
     const perms = (ROLES[r] && ROLES[r].perms) || BUILTIN_ROLES[r] || [];
     perms.forEach((p) => { set[p] = true; });
   });
+  // Алиасы: в старой CRM права зовутся order_*, гейты Этапа 3 — orders_*.
+  if (set.order_view_all) set.orders_view_all = true;
+  if (set.order_edit) set.orders_edit = true;
   return Object.keys(set);
 }
 

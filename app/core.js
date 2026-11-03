@@ -149,7 +149,15 @@ function doLogin(phone, code) {
 // --- Заглушки экранов (наполняются на следующих этапах) ---
 
 function renderOrders() {
-  return '<h2>Список заявок</h2><p class="muted">Этап 5: список, фильтры, карточки.</p>';
+  const all = DB.orders || [];
+  const canSeeAll = can('orders_view_all');
+  const mine = all.filter(function (o) { return isAssignedToMe(o); });
+  const visible = canSeeAll ? all : mine;
+  return '<h2>Список заявок</h2>' +
+    '<p class="muted">Этап 5: список, фильтры, карточки.</p>' +
+    '<p>Всего заявок: <b>' + visible.length + '</b>' +
+    (canSeeAll ? ' (все)' : ' (мои)') +
+    ' · в базе: ' + all.length + '</p>';
 }
 
 const S = {
