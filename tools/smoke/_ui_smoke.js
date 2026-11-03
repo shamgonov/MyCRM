@@ -46,8 +46,8 @@ assert(listHtml.indexOf('data-filter="all"') >= 0 && listHtml.indexOf('data-filt
   'renderOrdersList: чипы-фильтры на месте');
 assert(listHtml.indexOf('data-create-modal') >= 0, 'renderOrdersList: кнопка ➕');
 assert(listHtml.indexOf('data-order=') >= 0, 'renderOrdersList: есть карточки заявок');
-assert(listHtml.split('data-order=').length - 1 === 2,
-  'worker видит только 2 свои мок-заявки (гейт orders_view_all)');
+assert(listHtml.split('data-order=').length - 1 === 4,
+  'worker видит только свои мок-заявки (гейт orders_view_all, Этап 5: 4 штуки)');
 assert(listHtml.indexOf('👷 МОЯ') >= 0, 'бейдж «МОЯ» у заявки Мастера');
 assert(listHtml.indexOf('class="list-item mine"') >= 0, '«моя» карточка помечена');
 
@@ -66,7 +66,7 @@ const mineHtml = renderOrdersList();
 const mineCount = (mineHtml.match(/data-order=/g) || []).length;
 const expectedMine = DB.orders.filter(function (o) { return isAssignedToMe(o); }).length;
 assert.eq(mineCount, expectedMine, 'фильтр «Мои» = isAssignedToMe');
-assert.eq(expectedMine, 2, 'у Мастера 2 «мои» заявки (worker + helper)');
+assert.eq(expectedMine, 4, 'у Мастера 4 «мои» заявки (worker+helper, с Этапа 5)');
 
 // --- фильтр «Просрочка»: формула на конкретных объектах (роль не важна)
 assert(orderPassesFilter({ date: dateShift(localToday(), -1), status: 'new' }, 'overdue') === true,
@@ -90,7 +90,7 @@ state.filter = 'all';
 login('admin', 'Владелец');
 const adminList = renderOrdersList();
 const adminCount = (adminList.match(/data-order=/g) || []).length;
-assert.eq(adminCount, 4, 'admin видит все 4 заявки (гейт)');
+assert.eq(adminCount, 7, 'admin видит все 7 заявок (гейт)');
 
 // обратно worker для карточечных проверок
 login('worker', 'Мастер');

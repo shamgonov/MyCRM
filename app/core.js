@@ -12,6 +12,7 @@ var state = {
   filter: 'all',     // фильтр списка заявок
   calDate: null,     // дата календаря (инициализируется ниже через localToday())
   simOn: false,      // режим симуляции прав (владелец смотрит глазами роли)
+  online: false,     // «На линии» (Этап 5; живёт в localStorage crm2_online)
   navHistory: []     // история навигации для кнопки «Назад»
 };
 
@@ -160,9 +161,12 @@ const S = {
     if (typeof renderOrderCard === 'function') return renderOrderCard(state.orderId);
     return '<h2>Заявка</h2><p class="muted">Модуль UI ещё не загружен.</p>';
   },
+  calendar: function () {
+    if (typeof renderCalendar === 'function') return renderCalendar();
+    return '<h2>📅 Календарь</h2><p class="muted">Модуль UI ещё не загружен.</p>';
+  },
   clients: function () { return '<h2>Контрагенты</h2>'; },
   overdue: function () { return '<h2>Просроченные</h2>'; },
-  calendar: function () { return '<h2>Календарь</h2>'; },
   shopping: function () { return '<h2>Закупки</h2>'; },
   reports: function () { return '<h2>Отчёты</h2>'; },
   admin: function () { return '<h2>Админ</h2>'; },

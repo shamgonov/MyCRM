@@ -241,14 +241,23 @@ document.addEventListener('click', function (ev) {
     };
     const client = val('nc-client');
     if (!client) { toast('Укажите клиента', true); return; }
-    createOrder({
+    const data = {
       client: client,
       phone: val('nc-phone'),
       address: val('nc-address'),
       date: val('nc-date') || localToday(),
       t1: val('nc-t1'),
       t2: val('nc-t2')
-    });
+    };
+    // Конфликт проверяем по текущему пользователю (он станет worker после назначения).
+    data.worker = state.user;
+    const conflicts = (typeof checkTimeConflict === 'function') ? checkTimeConflict(data) : [];
+    if (conflicts.length) {
+      window.__calPending = data; // «Всё равно взять» доукомплектует через finishCreateOrder
+      showConflictModal(conflicts, data);
+      return;
+    }
+    createOrder(data);
     closeModal();
     state.filter = 'all';
     go('orders');

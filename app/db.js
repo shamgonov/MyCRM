@@ -100,7 +100,7 @@ function seedMockData() {
   // «Моя» заявка на сегодня (worker=Мастер)
   mk({ client: 'Смирнов А.П.', phone: '+7 912 345-67-89', address: 'ул. Ленина, 15, кв. 3',
     city: 'Екатеринбург', date: today, t1: '09:00', t2: '12:00', status: 'inwork',
-    worker: 'Мастер', helpers: ['Вера'],
+    worker: 'Мастер', helpers: ['Вера'], kind: 'work',
     works: [
       { title: 'Регулировка створки', qty: 2, price: 800, unit: 'шт' },
       { title: 'Замена уплотнителя', qty: 1, price: 1200, unit: 'компл' }
@@ -124,6 +124,23 @@ function seedMockData() {
       { title: 'Замена стекла', qty: 1, price: 4500, unit: 'шт' },
       { title: 'Фурнитура', qty: 1, price: 2800, unit: 'компл', skipped: true }
     ] });
+
+  // --- Этап 5: календарь ---
+
+  // Осмотр на завтра (мой)
+  mk({ client: 'Кузнецов Д.А.', phone: '+7 901 234-56-78', address: 'ул. Строителей, 5, кв. 12',
+    city: 'Екатеринбург', date: dateShift(today, 1), t1: '10:00', t2: '11:00',
+    status: 'inspection', examiner: 'Мастер', worker: 'Мастер', kind: 'inspection' });
+
+  // Работа через 2 дня (моя)
+  mk({ client: 'Волкова Н.И.', phone: '+7 903 777-88-99', address: 'ул. Малышева, 120, кв. 7',
+    city: 'Екатеринбург', date: dateShift(today, 2), t1: '12:00', t2: '14:00',
+    status: 'approved', worker: 'Мастер', kind: 'work' });
+
+  // Пересечение по времени у Бориса: 17:00-19:00 против его 14:00-18:00 сегодня
+  mk({ client: 'Сидоров П.П.', phone: '+7 908 321-65-49', address: 'ул. 8 Марта, 3',
+    city: 'Екатеринбург', date: today, t1: '17:00', t2: '19:00',
+    status: 'approved', worker: 'Борис', kind: 'work' });
 }
 
 // DB — глобальный объект, наполняется в load().

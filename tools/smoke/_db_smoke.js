@@ -20,14 +20,18 @@ const dd = defaultData();
 assert.eq(dd.seq, 0, 'defaultData: seq=0');
 assert(Array.isArray(dd.orders) && dd.orders.length === 0, 'defaultData: orders=[]');
 
-// Сид мок-данных в load(): 4 заявки, «своя» у Мастера, просрочка и «сегодня».
-assert.eq(DB.orders.length, 4, 'seedMockData: 4 демо-заявки');
-assert.eq(DB.seq, 4, 'seedMockData: seq = 4');
+// Сид мок-данных в load(): 7 заявок (с Этапа 5 — осмотр/работа/пересечение).
+assert.eq(DB.orders.length, 7, 'seedMockData: 7 демо-заявок');
+assert.eq(DB.seq, 7, 'seedMockData: seq = 7');
 assert(DB.orders.some(function (o) { return o.worker === 'Мастер' && o.date === localToday(); }),
   'seedMockData: есть «моя» заявка на сегодня');
 assert(DB.orders.some(function (o) {
   return o.status === 'new' && o.date < localToday();
 }), 'seedMockData: есть просрочка');
+assert(DB.orders.filter(function (o) { return o.kind === 'inspection'; }).length === 1,
+  'seedMockData: есть осмотр');
+assert(DB.orders.filter(function (o) { return o.kind === 'work'; }).length === 3,
+  'seedMockData: есть работы');
 assert(DB.orders.every(function (o) { return typeof o.id === 'number' && o.history.length >= 1; }),
   'seedMockData: у всех есть id и история');
 
@@ -82,7 +86,7 @@ DB = null;
 load();
 assert.eq(DB.seq, 42, 'load() читает сохранённое из localStorage');
 
-// Битый JSON в localStorage — fallback на defaultData + сид мок-данных (Этап 4).
+// Битый JSON в localStorage — fallback на defaultData + сид мок-данных.
 localStorage.setItem('crm2_db', '{oops');
 load();
-assert.eq(DB.seq, 4, 'load() с битым JSON → defaultData + seedMockData');
+assert.eq(DB.seq, 7, 'load() с битым JSON → defaultData + seedMockData');
