@@ -32,6 +32,7 @@ loadModule('app/core.js');
 loadModule('app/gates.js');
 loadModule('app/orders.js');
 loadModule('app/ui-orders.js');
+loadModule('app/ui-estimate.js'); // Этап 6: вкладка «Смета» живёт здесь
 
 // --- Вход как worker «Мастер»: видит только свои, у seed есть «его» заявки
 setOwnerFlag(false);

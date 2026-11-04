@@ -61,6 +61,11 @@ function defaultData() {
     users: [],
     clients: [],
     templates: [],
+    priceList: [
+      { id: 1, name: 'Замена уплотнителя ПВХ', category: 'Окна', basePrice: 900, unit: 'пог.м', defaultQty: 1 },
+      { id: 2, name: 'Регулировка створки', category: 'Окна', basePrice: 1500, unit: 'шт', defaultQty: 1 },
+      { id: 3, name: 'Установка доводчика', category: 'Двери', basePrice: 2000, unit: 'шт', defaultQty: 1 }
+    ],
     settings: {},
     regions: [{
       region: 'Свердловская область',
@@ -97,13 +102,16 @@ function seedMockData() {
     DB.orders.push(o);
   };
 
-  // «Моя» заявка на сегодня (worker=Мастер)
+  // «Моя» заявка на сегодня (worker=Мастер), с доп. работой на согласовании
   mk({ client: 'Смирнов А.П.', phone: '+7 912 345-67-89', address: 'ул. Ленина, 15, кв. 3',
     city: 'Екатеринбург', date: today, t1: '09:00', t2: '12:00', status: 'inwork',
     worker: 'Мастер', helpers: ['Вера'], kind: 'work',
     works: [
       { title: 'Регулировка створки', qty: 2, price: 800, unit: 'шт' },
       { title: 'Замена уплотнителя', qty: 1, price: 1200, unit: 'компл' }
+    ],
+    extras: [
+      { name: 'Подоконник ПВХ', qty: 1, price: 1500, status: 'pending_agree', reason: 'Клиент просит на месте' }
     ] });
 
   // Просрочка: новая, назначена на вчера
@@ -162,6 +170,8 @@ function load() {
     }
   }
   DB = data || defaultData();
+  // Мягкая миграция старых локальных баз: прайс появился на Этапе 6.
+  if (!Array.isArray(DB.priceList)) DB.priceList = defaultData().priceList;
   if ((DB.orders || []).length === 0) seedMockData();
   return DB;
 }

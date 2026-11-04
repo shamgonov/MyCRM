@@ -100,7 +100,7 @@ function renderOrderCard(id) {
   }).join('');
 
   let body;
-  if (ORD_TAB === 'estimate') body = renderOrderTabEstimate(o);
+  if (ORD_TAB === 'estimate') body = renderEstimateTab(o);
   else if (ORD_TAB === 'money') body = '<p class="muted">Оплаты и расчёты — Этап 10 (Отчёты).</p>';
   else if (ORD_TAB === 'journal') body = renderOrderTabJournal(o);
   else body = renderOrderTabMain(o);
@@ -166,23 +166,9 @@ function renderOrderTabMain(o) {
     statusBlock;
 }
 
-// --- 4. Вкладка «Смета» ---
+// --- 4. Вкладка «Смета» (заглушка, перенесена в ui-estimate.js) ---
 
-function renderOrderTabEstimate(o) {
-  const rows = (o.works || []).map(function (w) {
-    const sum = (Number(w.qty) || 0) * (Number(w.price) || 0);
-    return '<div class="est-row' + (w.skipped ? ' done' : '') + '">' +
-      '<span>' + escapeHtml(w.title) + '</span>' +
-      '<span>' + w.qty + ' × ' + money(w.price) + ' = <b>' + money(sum) + '</b></span>' +
-    '</div>';
-  }).join('');
-
-  return '<div class="card">' +
-      (rows || '<p class="muted">Работ пока нет.</p>') +
-      '<div class="est-total"><span>Итого:</span><span>' + money(calculateOrderTotal(o)) + '</span></div>' +
-      '<button class="btn btn-block" data-add-work style="margin-top:10px">+ Добавить работу</button>' +
-    '</div>';
-}
+// renderEstimateTab подключён из ui-estimate.js (Этап 6)
 
 // --- 5. Модалка создания заявки ---
 
