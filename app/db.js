@@ -66,7 +66,19 @@ function defaultData() {
       { id: 2, name: 'Регулировка створки', category: 'Окна', basePrice: 1500, unit: 'шт', defaultQty: 1 },
       { id: 3, name: 'Установка доводчика', category: 'Двери', basePrice: 2000, unit: 'шт', defaultQty: 1 }
     ],
-    settings: {},
+    settings: {
+      executorMode: 'phys', // 'phys' | 'self_employed' | 'legal'
+      executorPhys: { name: 'Иванов Иван Иванович', phone: '+7 912 123-45-67' },
+      executorSelfEmployed: {
+        name: 'Иванов Иван Иванович', inn: '123456789012', phone: '+7 912 123-45-67'
+      },
+      executorLegal: {
+        name: 'ООО "Окна-Сервис"', inn: '1234567890', kpp: '123456789',
+        address: 'г. Екатеринбург, ул. Ленина 1', bank: 'ПАО Сбербанк', bik: '044525604',
+        account: '40702810...', director: 'Иванов И.И.', phone: '+7 343 000-00-00'
+      },
+      docCounter: 0 // счётчик документов для нумерации
+    },
     regions: [{
       region: 'Свердловская область',
       cities: ['Екатеринбург', 'Нижний Тагил', 'Каменск-Уральский', 'Первоуральск']
@@ -125,10 +137,11 @@ function seedMockData() {
   mk({ client: 'Иванова М.С.', phone: '+7 922 111-22-33', address: 'ул. Мира, 8',
     city: 'Нижний Тагил', date: dateShift(today, -1), t1: '10:00', t2: '11:00', status: 'new' });
 
-  // Сегодня, согласована, за Борисом
+  // Сегодня, согласована, за Борисом (юрлицо — с реквизитами для документов)
   mk({ client: 'ООО ОкнаСервис', phone: '+7 343 200-00-00', address: 'пр. Ленина, 50, офис 12',
     city: 'Екатеринбург', date: today, t1: '14:00', t2: '18:00', status: 'approved',
     worker: 'Борис', helpers: [],
+    clientLegal: { name: 'ООО "Ромашка"', inn: '9876543210', kpp: '987654321', phone: '+7 343 111-22-33' },
     works: [{ title: 'Диагностика', qty: 1, price: 1000, unit: 'шт' }] });
 
   // Завершённая неделю назад (не попадает в просрочку, есть skipped-работа)
@@ -179,6 +192,12 @@ function load() {
   DB = data || defaultData();
   // Мягкая миграция старых локальных баз: прайс появился на Этапе 6.
   if (!Array.isArray(DB.priceList)) DB.priceList = defaultData().priceList;
+  // Реквизиты и счётчик документов появились на Этапе 8.
+  const defSettings = defaultData().settings;
+  if (!DB.settings || typeof DB.settings !== 'object') DB.settings = defSettings;
+  Object.keys(defSettings).forEach(function (k) {
+    if (DB.settings[k] === undefined) DB.settings[k] = defSettings[k];
+  });
   if ((DB.orders || []).length === 0) seedMockData();
   return DB;
 }
