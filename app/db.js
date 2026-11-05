@@ -212,3 +212,14 @@ function save() {
 }
 
 load();
+
+// Глобальный экспорт утилит и БД для последующих модулей (загрузка без сборщика).
+window.localToday = localToday;
+window.fmt = fmt;
+window.money = money;
+window.escapeHtml = escapeHtml;
+window.lsGet = lsGet;
+window.lsSet = lsSet;
+window.DB = DB;
+window.load = load;
+window.save = save;
