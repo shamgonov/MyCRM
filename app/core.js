@@ -167,7 +167,10 @@ const S = {
   },
   clients: function () { return '<h2>Контрагенты</h2>'; },
   overdue: function () { return '<h2>Просроченные</h2>'; },
-  shopping: function () { return '<h2>Закупки</h2>'; },
+  shopping: function () {
+    if (typeof renderGlobalShopping === 'function') return renderGlobalShopping();
+    return '<h2>🛒 Закупки</h2><p class="muted">Модуль UI ещё не загружен.</p>';
+  },
   reports: function () { return '<h2>Отчёты</h2>'; },
   admin: function () { return '<h2>Админ</h2>'; },
   tasks: function () { return '<h2>Поиск заказов</h2>'; },

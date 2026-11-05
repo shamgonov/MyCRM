@@ -93,7 +93,7 @@ function renderOrderCard(id) {
   }
 
   const tabs = [
-    ['main', 'Основное'], ['estimate', 'Смета'], ['money', 'Деньги'], ['journal', 'Журнал']
+    ['main', 'Основное'], ['estimate', 'Смета'], ['materials', 'Материалы'], ['journal', 'Журнал']
   ].map(function (t) {
     return '<button class="tab-btn' + (ORD_TAB === t[0] ? ' active' : '') +
       '" data-tab="' + t[0] + '">' + t[1] + '</button>';
@@ -101,7 +101,7 @@ function renderOrderCard(id) {
 
   let body;
   if (ORD_TAB === 'estimate') body = renderEstimateTab(o);
-  else if (ORD_TAB === 'money') body = '<p class="muted">Оплаты и расчёты — Этап 10 (Отчёты).</p>';
+  else if (ORD_TAB === 'materials') body = renderShoppingTab(o);
   else if (ORD_TAB === 'journal') body = renderOrderTabJournal(o);
   else body = renderOrderTabMain(o);
 

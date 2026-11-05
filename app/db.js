@@ -112,6 +112,13 @@ function seedMockData() {
     ],
     extras: [
       { name: 'Подоконник ПВХ', qty: 1, price: 1500, status: 'pending_agree', reason: 'Клиент просит на месте' }
+    ],
+    materials: [
+      { name: 'Уплотнитель ПВХ', qty: 10, unit: 'пог.м', price: 250, buyer: 'company', status: 'needed' },
+      { name: 'Доводчик', qty: 1, unit: 'шт', price: 1500, buyer: 'worker', status: 'bought',
+        factPrice: 1600, hasReceipt: true, note: 'Купил в Леруа' },
+      { name: 'Стеклопакет', qty: 1, unit: 'шт', price: 5000, buyer: 'company', status: 'spoiled',
+        note: 'Разбит при доставке' }
     ] });
 
   // Просрочка: новая, назначена на вчера

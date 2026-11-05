@@ -101,7 +101,7 @@ const myOrder = DB.orders.find(function (o) { return o.worker === 'Мастер'
 const cardHtml = renderOrderCard(myOrder.id);
 assert(cardHtml.indexOf('Заявка №' + myOrder.id) >= 0, 'карточка: заголовок с номером');
 assert(cardHtml.indexOf('data-tab="main"') >= 0 && cardHtml.indexOf('data-tab="estimate"') >= 0 &&
-  cardHtml.indexOf('data-tab="money"') >= 0 && cardHtml.indexOf('data-tab="journal"') >= 0,
+  cardHtml.indexOf('data-tab="materials"') >= 0 && cardHtml.indexOf('data-tab="journal"') >= 0,
   'карточка: 4 таба');
 assert(cardHtml.indexOf('tel:') >= 0, 'карточка: телефон ссылкой tel:');
 assert(cardHtml.indexOf('Исполнители') >= 0, 'карточка: блок исполнителей');
