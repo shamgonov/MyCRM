@@ -25,6 +25,8 @@ function localToday() {
   const p = (n) => (n < 10 ? '0' + n : '' + n);
   return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
 }
+// core.js вызывает localToday() сразу при загрузке — экспорт нужен до его запуска.
+window.localToday = localToday;
 
 // Алиас для совместимости со старой CRM: fmt(d) — локальная дата YYYY-MM-DD.
 function fmt(d) {
@@ -214,7 +216,6 @@ function save() {
 load();
 
 // Глобальный экспорт утилит и БД для последующих модулей (загрузка без сборщика).
-window.localToday = localToday;
 window.fmt = fmt;
 window.money = money;
 window.escapeHtml = escapeHtml;
