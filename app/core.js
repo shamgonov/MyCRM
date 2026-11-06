@@ -165,17 +165,48 @@ const S = {
     if (typeof renderCalendar === 'function') return renderCalendar();
     return '<h2>📅 Календарь</h2><p class="muted">Модуль UI ещё не загружен.</p>';
   },
-  clients: function () { return '<h2>Контрагенты</h2>'; },
-  overdue: function () { return '<h2>Просроченные</h2>'; },
+  clients: function () {
+    return '<h2>📇 Контрагенты</h2>' +
+      '<div class="card">' +
+        '<p class="muted">Экран в разработке (Этап 9).</p>' +
+        '<p class="small">Здесь будет список клиентов с историей заказов.</p>' +
+      '</div>';
+  },
+  overdue: function () {
+    return '<h2>⏰ Просроченные заявки</h2>' +
+      '<div class="card">' +
+        '<p class="muted">Экран в разработке (Этап 9).</p>' +
+        '<p class="small">Здесь будут заявки с просроченной датой.</p>' +
+      '</div>';
+  },
   shopping: function () {
     if (typeof renderGlobalShopping === 'function') return renderGlobalShopping();
     return '<h2>🛒 Закупки</h2><p class="muted">Модуль UI ещё не загружен.</p>';
   },
-  reports: function () { return '<h2>Отчёты</h2>'; },
-  admin: function () { return '<h2>Админ</h2>'; },
+  reports: function () {
+    return '<h2>📊 Отчёты</h2>' +
+      '<div class="card">' +
+        '<p class="muted">Экран в разработке (Этап 10).</p>' +
+        '<p class="small">Здесь будет аналитика по прибыли и эффективности.</p>' +
+      '</div>';
+  },
+  admin: function () {
+    return '<h2>⚙️ Администрирование</h2>' +
+      '<div class="card">' +
+        '<p class="muted">Экран в разработке (Этап 11).</p>' +
+        '<p class="small">Здесь будет управление сотрудниками, ролями и шаблонами.</p>' +
+      '</div>';
+  },
   tasks: function () { return '<h2>Поиск заказов</h2>'; },
   create: function () { return '<h2>Новая заявка</h2>'; },
-  profile: function () { return '<h2>Профиль</h2>'; }
+  profile: function () {
+    return '<h2>👤 Профиль</h2>' +
+      '<div class="card">' +
+        '<p class="muted">Экран в разработке (Этап 12).</p>' +
+        '<p class="small">Здесь будут настройки пользователя, PIN-код, график работы.</p>' +
+        '<button class="btn btn-primary" data-logout style="margin-top:12px">🚪 Выйти</button>' +
+      '</div>';
+  }
 };
 // const не создаёт свойства window (в отличие от var/function) — экспорт для
 // отладки из консоли и внешних модулей; роутер ниже использует лексическую S.
@@ -225,6 +256,15 @@ document.addEventListener('click', function (ev) {
 
   const backBtn = ev.target.closest('[data-back]');
   if (backBtn) { goBack(); return; }
+
+  const logoutBtn = ev.target.closest('[data-logout]');
+  if (logoutBtn) {
+    if (confirm('Выйти из CRM2?')) {
+      logout();
+      render();
+    }
+    return;
+  }
 });
 
 // --- Старт: все модули подключены обычными <script>, ждём готовности DOM
