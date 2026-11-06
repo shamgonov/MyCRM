@@ -177,6 +177,9 @@ const S = {
   create: function () { return '<h2>Новая заявка</h2>'; },
   profile: function () { return '<h2>Профиль</h2>'; }
 };
+// const не создаёт свойства window (в отличие от var/function) — экспорт для
+// отладки из консоли и внешних модулей; роутер ниже использует лексическую S.
+window.S = S;
 
 // --- Модалки: оверлей поверх текущего экрана (#modal-container в index.html) ---
 
