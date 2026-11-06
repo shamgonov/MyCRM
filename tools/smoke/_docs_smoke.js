@@ -215,3 +215,31 @@ assert(!fresh.docInvoiceNumber, 'заявка без номера сметы');
 fresh.docInvoiceNumber = generateDocNumber();
 assert.eq(DB.settings.docCounter, counterBefore + 1, 'первый выпуск: счётчик +1');
 closeModal();
+
+// --- 9. Интеграция с карточкой заявки (ui-orders.js) ---
+// Раньше эти проверки отсутствовали: вкладка «Документы» могла исчезнуть из
+// renderOrderCard, а смоуки остались бы зелёными (проверялся только renderDocsTab).
+const savedTab = ORD_TAB;
+const myOrder = DB.orders.find(function (o) { return isAssignedToMe(o); });
+assert(myOrder, 'сид: есть заявка, назначенная текущему пользователю');
+
+ORD_TAB = 'main';
+const cardHtml = renderOrderCard(myOrder.id);
+assert(cardHtml.indexOf('data-tab="docs"') >= 0,
+  'карточка: таб «Документы» присутствует среди табов');
+assert(cardHtml.indexOf('>Документы</button>') >= 0,
+  'карточка: таб подписан «Документы»');
+
+// Активный таб — docs: карточка должна вызвать renderDocsTab и отдать кнопки.
+ORD_TAB = 'docs';
+const docsCard = renderOrderCard(myOrder.id);
+assert(docsCard.indexOf('data-make-invoice="' + myOrder.id + '"') >= 0,
+  'карточка (ORD_TAB=docs): рендерится кнопка «Смета»');
+assert(docsCard.indexOf('data-make-act="' + myOrder.id + '"') >= 0,
+  'карточка (ORD_TAB=docs): рендерится кнопка «Акт»');
+assert(docsCard.indexOf('class="tab-btn active" data-tab="docs"') >= 0,
+  'карточка (ORD_TAB=docs): таб подсвечен как активный');
+assert(docsCard.indexOf('Модуль документов не загружен') < 0,
+  'карточка (ORD_TAB=docs): ui-docs.js подключён, фолбэк не сработал');
+
+ORD_TAB = savedTab;
