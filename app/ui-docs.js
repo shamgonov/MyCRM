@@ -372,3 +372,7 @@ document.addEventListener('click', function (ev) {
     return;
   }
 });
+
+// Явный экспорт в window: таб «Документы» и печать вызываются из ui-orders.js/core.js.
+window.renderDocsTab = renderDocsTab;
+window.printDocument = printDocument;
