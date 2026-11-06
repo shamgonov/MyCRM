@@ -301,3 +301,6 @@ document.addEventListener('click', function (ev) {
     return;
   }
 });
+
+// Явный экспорт в window: глобальный список закупок вызывается из карты S (core.js).
+window.renderGlobalShopping = renderGlobalShopping;

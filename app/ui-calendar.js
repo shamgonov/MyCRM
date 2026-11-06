@@ -304,3 +304,6 @@ function renderCreateOrderPrefilled(data) {
 }
 
 loadOnline();
+
+// Явный экспорт в window: экран календаря вызывается из карты S (core.js).
+window.renderCalendar = renderCalendar;
