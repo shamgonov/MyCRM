@@ -54,10 +54,15 @@ function renderOrdersList() {
     ? rows.map(renderOrderListItem).join('')
     : '<p class="muted">Заявок нет по этому фильтру.</p>';
 
+  // Баннер напоминаний (Этап 9) живёт в notify.js — он грузится позже этого
+  // модуля, поэтому ленивый вызов: без notify.js список работает как раньше.
+  const bar = (typeof renderNotificationsBar === 'function') ? renderNotificationsBar() : '';
+
   return '<div class="spread">' +
       '<h2>📋 Заявки</h2>' +
       '<button class="btn btn-primary" data-create-modal title="Новая заявка">➕</button>' +
     '</div>' +
+    bar +
     '<div class="chips">' + chips + '</div>' +
     '<div class="list">' + cards + '</div>';
 }
