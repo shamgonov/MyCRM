@@ -184,6 +184,7 @@ const S = {
     return '<h2>🛒 Закупки</h2><p class="muted">Модуль UI ещё не загружен.</p>';
   },
   reports: function () {
+    if (typeof renderReports === 'function') return renderReports();
     return '<h2>📊 Отчёты</h2>' +
       '<div class="card">' +
         '<p class="muted">Экран в разработке (Этап 10).</p>' +
