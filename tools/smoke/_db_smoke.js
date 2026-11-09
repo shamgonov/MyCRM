@@ -35,7 +35,7 @@ assert(DB.orders.filter(function (o) { return o.kind === 'work'; }).length === 3
 assert(DB.orders.every(function (o) { return typeof o.id === 'number' && o.history.length >= 1; }),
   'seedMockData: у всех есть id и история');
 
-assert(Array.isArray(DB.users) && DB.users.length === 0, 'defaultData: users=[]');
+assert(Array.isArray(DB.users) && DB.users.length >= 2, 'load(): засеяно минимум 2 сотрудника');
 assert(Array.isArray(DB.clients) && DB.clients.length === 0, 'defaultData: clients=[]');
 assert(Array.isArray(DB.templates), 'defaultData: templates=[]');
 assert(typeof DB.settings === 'object' && DB.settings !== null, 'defaultData: settings={}');

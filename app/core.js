@@ -192,11 +192,9 @@ const S = {
       '</div>';
   },
   admin: function () {
+    if (typeof renderAdmin === 'function') return renderAdmin();
     return '<h2>⚙️ Администрирование</h2>' +
-      '<div class="card">' +
-        '<p class="muted">Экран в разработке (Этап 11).</p>' +
-        '<p class="small">Здесь будет управление сотрудниками, ролями и шаблонами.</p>' +
-      '</div>';
+      '<p class="muted">Модуль UI ещё не загружен.</p>';
   },
   tasks: function () { return '<h2>Поиск заказов</h2>'; },
   create: function () { return '<h2>Новая заявка</h2>'; },

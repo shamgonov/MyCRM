@@ -203,6 +203,15 @@ function load() {
     if (DB.settings[k] === undefined) DB.settings[k] = defSettings[k];
   });
   if ((DB.orders || []).length === 0) seedMockData();
+  // По умолчанию — 2 сотрудника (Этап 11), иначе админка пуста и роли менять некому.
+  // id синтетические: запись с id === deviceId() дала бы любому устройству
+  // права из DB.users в обход роли, заданной при входе (auth.myPerms).
+  if (!(DB.users && DB.users.length)) {
+    DB.users = [
+      { id: 'dev-owner', name: 'Владелец', role: 'admin' },
+      { id: 'dev-worker', name: 'Мастер', role: 'worker' }
+    ];
+  }
   return DB;
 }
 
