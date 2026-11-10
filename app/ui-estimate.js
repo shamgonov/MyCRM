@@ -2,20 +2,12 @@
    доп. работы, расчёт итога. Зависит от db.js, auth.js, orders.js, core.js. */
 'use strict';
 
-// --- 6. calculateEstimateTotal: работы (с учётом коэффициента) + согласованные доп. ---
+// --- 6. calculateEstimateTotal: алиас единой базы суммы (Q3) ---
+// Раньше здесь дублировался расчёт с коэффициентом, а calculateOrderTotal считал без
+// него — смета и отчёты показывали разные деньги. Теперь база одна (orders.js).
 
 function calculateEstimateTotal(o) {
-  if (!o) return 0;
-  let total = 0;
-  (o.works || []).forEach(function (w) {
-    if (w.skipped) return;
-    total += (Number(w.qty) || 0) * (Number(w.price) || 0) * (Number(w.coeff) || 1);
-  });
-  (o.extras || []).forEach(function (e) {
-    if (e.status !== 'agreed') return;
-    total += (Number(e.qty) || 0) * (Number(e.price) || 0);
-  });
-  return total;
+  return calculateOrderTotal(o);
 }
 
 // --- 5. toggleWorkDone: циклическое переключение (null → done → skipped → null) ---

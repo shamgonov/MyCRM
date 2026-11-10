@@ -12,7 +12,8 @@ const REMINDER_LABELS = {
   overdue: '⚠️ Просрочено',
   upcoming: '⏰ Скоро',
   today: '📅 Сегодня',
-  material: '🧱 Материалы'
+  material: '🧱 Материалы',
+  balance: '💰 Остаток'
 };
 
 // Ключ localStorage: { "<kind>:<orderId>": "YYYY-MM-DD" } — напоминание скрыто на день.
@@ -133,6 +134,23 @@ function buildReminders(orders) {
       }
     }
   });
+
+  // Неоплаченный остаток при завершённой заявке (Этап 12): moneyReminderAt ставится
+  // при переходе в completed; такие заявки отсекаются NOTIFY_DONE выше, поэтому
+  // отдельный проход по всем заявкам.
+  if (typeof orderBalance === 'function') {
+    (DB.orders || []).forEach(function (o) {
+      if (!o.moneyReminderAt || orderBalance(o) <= 0) return;
+      const key = reminderKey('balance', o.id);
+      if (!seenToday(key)) {
+        out.push({
+          orderId: o.id, key: key, kind: 'balance',
+          title: '№' + o.id + ' ' + (o.client || ''),
+          when: 'остаток ' + orderBalance(o) + ' ₽'
+        });
+      }
+    });
+  }
   return out;
 }
 

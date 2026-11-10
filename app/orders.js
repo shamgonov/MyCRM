@@ -30,17 +30,19 @@ function normalizeOrder(o) {
   if (!Array.isArray(o.extras)) o.extras = [];
   if (!Array.isArray(o.materials)) o.materials = [];
   if (!Array.isArray(o.history)) o.history = [];
+  if (!Array.isArray(o.payments)) o.payments = [];
   return o;
 }
 
-// calculateOrderTotal(o): работы (не skipped) + доп.работы (agreed);
+// calculateOrderTotal(o): ЕДИНАЯ база суммы заявки для сметы, документов и отчётов
+// (решение Q3): работы (не skipped, с коэффициентом) + доп.работы (agreed);
 // материалы включаются в сумму клиента только при matsInTotal.
 function calculateOrderTotal(o) {
   if (!o) return 0;
   let total = 0;
   (o.works || []).forEach(function (w) {
     if (w.skipped) return;
-    total += (Number(w.qty) || 0) * (Number(w.price) || 0);
+    total += (Number(w.qty) || 0) * (Number(w.price) || 0) * (Number(w.coeff) || 1);
   });
   (o.extras || []).forEach(function (x) {
     if (x.status !== 'agreed') return;
@@ -81,6 +83,7 @@ function createOrder(data) {
   o.materials = Array.isArray(o.materials) ? o.materials : [];
   o.history = Array.isArray(o.history) ? o.history : [];
   o.helpers = Array.isArray(o.helpers) ? o.helpers : [];
+  o.payments = Array.isArray(o.payments) ? o.payments : [];
   o.createdAt = Date.now();
   o.createdBy = state.user;
   o.history.push({ ts: Date.now(), by: state.user, action: 'create', details: 'Заявка создана' });
@@ -108,4 +111,79 @@ function transitionOrder(id, newStatus, reason) {
   });
   saveOrderLocal(o);
   return true;
+}
+
+// --- Деньги заявки (Этап 12) ---
+// Выручка = единая база calculateOrderTotal (Q3); оплачено = сумма o.payments.
+
+function orderRevenue(o) {
+  return calculateOrderTotal(o);
+}
+
+function orderPaid(o) {
+  if (!o || !Array.isArray(o.payments)) return 0;
+  return o.payments.reduce(function (s, p) { return s + (Number(p.sum) || 0); }, 0);
+}
+
+function orderBalance(o) {
+  return orderRevenue(o) - orderPaid(o);
+}
+
+// addPayment(o, data): платёж с валидацией суммы; запись в историю.
+function addPayment(o, data) {
+  if (!o || !data) return null;
+  const sum = Number(data.sum);
+  if (!isFinite(sum) || sum <= 0) return null;
+  normalizeOrder(o);
+  const pay = {
+    id: (o.payments.length ? Math.max.apply(null, o.payments.map(function (p) {
+      return Number(p.id) || 0;
+    })) : 0) + 1,
+    sum: sum,
+    date: data.date || localToday(),
+    method: data.method || 'cash',
+    by: state.user,
+    note: data.note || ''
+  };
+  o.payments.push(pay);
+  o.history.push({
+    ts: Date.now(), by: state.user, action: 'payment',
+    details: 'Платёж ' + sum + ' ₽ (' + pay.method + ')' + (pay.note ? ' — ' + pay.note : '')
+  });
+  saveOrderLocal(o);
+  return pay;
+}
+
+function removePayment(o, paymentId) {
+  if (!o || !Array.isArray(o.payments)) return false;
+  const idx = o.payments.findIndex(function (p) { return p.id === paymentId; });
+  if (idx < 0) return false;
+  const removed = o.payments.splice(idx, 1)[0];
+  normalizeOrder(o);
+  o.history.push({
+    ts: Date.now(), by: state.user, action: 'payment',
+    details: 'Платёж удалён: ' + (Number(removed.sum) || 0) + ' ₽'
+  });
+  saveOrderLocal(o);
+  return true;
+}
+
+// --- Доля исполнителя (Этап 13, решение Q2: reward — расход компании) ---
+
+// Процент заявки: локальный override o.rewardPct, иначе общий DB.settings.rewardPctDefault.
+// 0 означает «выключено» явно, поэтому переопределение проверяем на заданность, а не на truthy.
+function orderRewardPct(o) {
+  const local = o ? o.rewardPct : null;
+  if (local !== null && local !== undefined && local !== '' && isFinite(Number(local))) {
+    return Number(local);
+  }
+  const global = (DB && DB.settings) ? Number(DB.settings.rewardPctDefault) : 0;
+  return isFinite(global) ? global : 0;
+}
+
+// Доля исполнителя в рублях от выручки заявки.
+function orderReward(o) {
+  const pct = orderRewardPct(o);
+  if (!pct) return 0;
+  return Math.round(orderRevenue(o) * pct / 100);
 }

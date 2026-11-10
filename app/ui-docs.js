@@ -156,8 +156,9 @@ function docSignatures(executor, client) {
 }
 
 // Платежи заявки: сумма всех payments (аванс и т.п.).
+// Единая реализация — orderPaid() в orders.js (Этап 12); здесь алиас для документов.
 function paidSum(o) {
-  return (o.payments || []).reduce(function (s, p) { return s + (Number(p.sum) || 0); }, 0);
+  return (typeof orderPaid === 'function') ? orderPaid(o) : 0;
 }
 
 // CSS для печати: светлая тема, таблицы, поля подписей.

@@ -82,7 +82,7 @@ assert(starts.every(function (v, i) { return i === 0 || starts[i - 1] <= v; }),
 DB.settings.remindBeforeH = 2;
 const reminders = buildReminders(upcoming);
 assert(reminders.length > 0, 'buildReminders: список непустой');
-const KINDS = ['overdue', 'upcoming', 'today', 'material'];
+const KINDS = ['overdue', 'upcoming', 'today', 'material', 'balance'];
 assert(reminders.every(function (r) { return KINDS.indexOf(r.kind) >= 0; }),
   'buildReminders: kind всегда из ' + KINDS.join('/'));
 assert(reminders.every(function (r) { return r.orderId && r.title && r.when && r.key; }),

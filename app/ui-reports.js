@@ -31,14 +31,19 @@ function orderExpenses(o) {
   return { materials: materials, compensations: compensations };
 }
 
-// calculateProfit(orders, dateFrom, dateTo) → {revenue, materials, compensations, profit}.
+// calculateProfit(orders, dateFrom, dateTo) → {revenue, materials, compensations, reward, profit}.
+// Доля исполнителя — расход компании на оплату труда (решение Q2).
 function calculateProfit(orders, dateFrom, dateTo) {
   var list = filterByDate(orders, dateFrom, dateTo);
   var revenue = 0;
   var materials = 0;
   var compensations = 0;
+  var reward = 0;
   list.forEach(function (o) {
-    if (REPORT_DONE.indexOf(o.status) >= 0) revenue += calculateOrderTotal(o) || 0;
+    if (REPORT_DONE.indexOf(o.status) >= 0) {
+      revenue += calculateOrderTotal(o) || 0;
+      reward += (typeof orderReward === 'function') ? orderReward(o) : 0;
+    }
     var e = orderExpenses(o);
     materials += e.materials;
     compensations += e.compensations;
@@ -47,7 +52,8 @@ function calculateProfit(orders, dateFrom, dateTo) {
     revenue: revenue,
     materials: materials,
     compensations: compensations,
-    profit: revenue - materials - compensations
+    reward: reward,
+    profit: revenue - materials - compensations - reward
   };
 }
 
@@ -67,10 +73,11 @@ function calculateByWorker(orders, dateFrom, dateTo) {
   list.forEach(function (o) {
     const name = o.worker || '— не назначен —';
     if (!map[name]) {
-      map[name] = { worker: name, revenue: 0, materials: 0, compensations: 0, profit: 0, count: 0 };
+      map[name] = { worker: name, revenue: 0, materials: 0, compensations: 0, reward: 0, profit: 0, count: 0 };
     }
     if (REPORT_DONE.indexOf(o.status) >= 0) {
       map[name].revenue += calculateOrderTotal(o) || 0;
+      map[name].reward += (typeof orderReward === 'function') ? orderReward(o) : 0;
       map[name].count++;
     }
     var e = orderExpenses(o);
@@ -82,7 +89,8 @@ function calculateByWorker(orders, dateFrom, dateTo) {
     return {
       worker: r.worker,
       revenue: r.revenue,
-      profit: r.revenue - r.materials - r.compensations,
+      reward: r.reward,
+      profit: r.revenue - r.materials - r.compensations - r.reward,
       count: r.count
     };
   }).sort(function (a, b) { return b.revenue - a.revenue; });
@@ -167,6 +175,15 @@ function rrow(cells, head) {
     }).join('') + '</div>';
 }
 
+// Таблица мастеров шире на одну колонку («Доля» появилась на Этапе 13).
+const WGRID = 'display:grid;grid-template-columns:1.4fr 1fr 1fr 1fr .6fr;gap:8px;';
+function wrow(cells, head) {
+  return '<div style="' + WGRID + (head ? 'font-weight:700;color:var(--muted);' : '') + '">' +
+    cells.map(function (c, i) {
+      return '<span' + (i ? ' style="text-align:right"' : '') + '>' + c + '</span>';
+    }).join('') + '</div>';
+}
+
 function profitReport() {
   const p = calculateProfit(DB.orders || [], periodDates().from, periodDates().to);
   const big = function (label, value, accent) {
@@ -180,6 +197,7 @@ function profitReport() {
       big('Выручка', p.revenue) +
       big('Материалы', p.materials) +
       big('Компенсации', p.compensations) +
+      big('Доля исполнителей', p.reward) +
       big('Прибыль', p.profit, true) +
     '</div>';
   return cards +
@@ -190,10 +208,10 @@ function workerReport() {
   const rows = calculateByWorker(DB.orders || [], periodDates().from, periodDates().to);
   if (!rows.length) return '<p class="muted">Нет данных за этот период.</p>';
   const body = rows.map(function (r) {
-    return rrow([escapeHtml(r.worker), money(r.revenue), money(r.profit), r.count]);
+    return wrow([escapeHtml(r.worker), money(r.revenue), money(r.reward), money(r.profit), r.count]);
   }).join('');
   return '<div class="card">' +
-      rrow(['Мастер', 'Выручка', 'Прибыль', 'Заявок'], true) + body +
+      wrow(['Мастер', 'Выручка', 'Доля', 'Прибыль', 'Заявок'], true) + body +
     '</div>' +
     '<button class="btn btn-block" data-export-workers style="margin-top:10px">📥 Экспорт CSV</button>';
 }

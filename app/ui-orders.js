@@ -99,7 +99,7 @@ function renderOrderCard(id) {
 
   const tabs = [
     ['main', 'Основное'], ['estimate', 'Смета'], ['materials', 'Материалы'],
-    ['docs', 'Документы'], ['journal', 'Журнал']
+    ['docs', 'Документы'], ['money', 'Деньги'], ['journal', 'Журнал']
   ].map(function (t) {
     return '<button class="tab-btn' + (ORD_TAB === t[0] ? ' active' : '') +
       '" data-tab="' + t[0] + '">' + t[1] + '</button>';
@@ -109,6 +109,7 @@ function renderOrderCard(id) {
   if (ORD_TAB === 'estimate') body = renderEstimateTab(o);
   else if (ORD_TAB === 'materials') body = renderShoppingTab(o);
   else if (ORD_TAB === 'docs') body = (typeof renderDocsTab === 'function') ? renderDocsTab(o) : '<p class="muted">Модуль документов не загружен.</p>';
+  else if (ORD_TAB === 'money') body = (typeof renderMoneyTab === 'function') ? renderMoneyTab(o) : '<p class="muted">Модуль денег не загружен.</p>';
   else if (ORD_TAB === 'journal') body = renderOrderTabJournal(o);
   else body = renderOrderTabMain(o);
 
@@ -268,6 +269,12 @@ document.addEventListener('change', function (ev) {
   if (transitionOrder(id, ns)) {
     toast('Статус: ' + (STATUS_LABELS[ns] || ns));
     render();
+    // Завершение с долгом: предлагаем напоминание об остатке (Этап 12).
+    if (ns === 'completed' && typeof orderBalance === 'function' &&
+        typeof showBalanceReminderModal === 'function') {
+      const done = (DB.orders || []).find(function (x) { return x.id === id; });
+      if (done && orderBalance(done) > 0) showBalanceReminderModal(done);
+    }
   } else {
     toast('Переход не разрешён', true);
   }
