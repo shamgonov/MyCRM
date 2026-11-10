@@ -20,11 +20,12 @@ function statusBadgeClass(st) {
 // Открытая вкладка карточки (переживает перерисовки).
 var ORD_TAB = 'main';
 
-// --- Фильтры списка: [Все][Сегодня][👷 Мои][⚠️ Просрочка] ---
+// --- Фильтры списка: [Все][🤝 Пул][Сегодня][👷 Мои][⚠️ Просрочка] ---
 
 function orderPassesFilter(o, f) {
   if (f === 'today') return o.date === localToday();
   if (f === 'mine') return isAssignedToMe(o);
+  if (f === 'pool') return isPoolOrder(o) && !hiddenTakeFromMe(o);
   if (f === 'overdue') {
     return o.date < localToday() &&
       o.status !== 'completed' && o.status !== 'paid' && o.status !== 'canceled';
@@ -44,7 +45,8 @@ function renderOrdersList() {
     .filter(function (o) { return orderPassesFilter(o, f); });
 
   const chips = [
-    ['all', 'Все'], ['today', 'Сегодня'], ['mine', '👷 Мои'], ['overdue', '⚠️ Просрочка']
+    ['all', 'Все'], ['pool', '🤝 Пул'], ['today', 'Сегодня'],
+    ['mine', '👷 Мои'], ['overdue', '⚠️ Просрочка']
   ].map(function (c) {
     return '<button class="chip' + (f === c[0] ? ' active' : '') +
       '" data-filter="' + c[0] + '">' + c[1] + '</button>';
@@ -70,10 +72,12 @@ function renderOrdersList() {
 // Карточка заявки в списке.
 function renderOrderListItem(o) {
   const mine = isAssignedToMe(o);
+  const pending = isMyPendingConfirm(o);
   return '<div class="list-item' + (mine ? ' mine' : '') + '" data-order="' + o.id + '">' +
     '<div class="spread">' +
       '<b>№' + o.id + ' ' + escapeHtml(o.client) + '</b>' +
       '<span>' +
+        (pending ? '<span class="badge badge-warn">❓ Подтвердить</span> ' : '') +
         (mine ? '<span class="badge badge-accent">👷 МОЯ</span> ' : '') +
         '<span class="' + statusBadgeClass(o.status) + '">' +
           (STATUS_LABELS[o.status] || o.status) + '</span>' +
@@ -81,7 +85,20 @@ function renderOrderListItem(o) {
     '</div>' +
     '<div class="small muted">' + o.date + ' ' + (o.t1 || '') + '-' + (o.t2 || '') +
       ' · ' + escapeHtml(o.city || '') + '</div>' +
+    (showTakeBtn(o)
+      ? '<div style="margin-top:8px">' + takeButton(o) + '</div>'
+      : '') +
   '</div>';
+}
+
+// Ожидаю ли я подтвердить участие в этой заявке (Этап 14).
+function isMyPendingConfirm(o) {
+  if (!o || !o.confirm) return false;
+  return o.confirm[state.user] === 'pending';
+}
+
+function takeButton(o) {
+  return '<button class="btn btn-primary" data-take-order="' + o.id + '">✋ Взять в работу</button>';
 }
 
 // --- 2. Карточка заявки (табы) ---
@@ -165,13 +182,111 @@ function renderOrderTabMain(o) {
       '<div><a href="tel:' + escapeHtml(o.phone || '') + '">' + escapeHtml(o.phone || '—') + '</a></div>' +
       '<div class="muted">' + escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '</div>' +
     '</div>' +
-    '<div class="card info-block">' +
+    renderOrderTeamBlock(o, editable) +
+    statusBlock;
+}
+
+// Подпись статуса подтверждения соисполнителя.
+const CONFIRM_LABELS = {
+  pending: ['⏳ ждёт подтверждения', 'badge-warn'],
+  ok: ['✅ подтвердил', 'badge-ok'],
+  no: ['✖ отказался', 'badge-danger']
+};
+
+// Блок «Исполнители»: взятие из пула, подтверждение соисполнителя, приглашение.
+function renderOrderTeamBlock(o, editable) {
+  const rows = (o.helpers || []).map(function (h) {
+    const st = (o.confirm && o.confirm[h]) || 'ok';
+    const label = CONFIRM_LABELS[st] || CONFIRM_LABELS.ok;
+    return '<div class="est-row"><span>' + escapeHtml(h) + '</span>' +
+      '<span class="badge ' + label[1] + '">' + label[0] + '</span></div>';
+  });
+
+  let actions = '';
+  if (showTakeBtn(o)) actions += takeButton(o);
+  if (isMyPendingConfirm(o)) {
+    actions += '<div class="row" style="margin-top:8px">' +
+      '<button class="btn btn-primary" data-confirm-helper="' + o.id + '|ok" style="flex:1">✅ Принять</button>' +
+      '<button class="btn btn-danger" data-confirm-helper="' + o.id + '|no" style="flex:1">Отказаться</button>' +
+    '</div>';
+  }
+  if (editable && can('order_assign')) {
+    actions += '<button class="btn" data-add-helper="' + o.id + '" style="margin-top:8px">＋ Соисполнитель</button>';
+  }
+
+  return '<div class="card info-block">' +
       '<h4>Исполнители</h4>' +
       '<div>Основной: <b>' + escapeHtml(o.worker || '— не назначен —') + '</b></div>' +
-      '<div class="muted">Соисполнители: ' +
-        ((o.helpers && o.helpers.length) ? escapeHtml(o.helpers.join(', ')) : '—') + '</div>' +
-    '</div>' +
-    statusBlock;
+      (rows.length
+        ? '<div class="muted">Соисполнители:</div>' + rows.join('')
+        : '<div class="muted">Соисполнители: —</div>') +
+      actions +
+    '</div>';
+}
+
+// Заявка по id (общий поиск для обработчиков карточки).
+function findOrderById(id) {
+  return (DB.orders || []).find(function (x) { return x.id === id; }) || null;
+}
+
+// Взять заявку: спереди проверка слота, иначе мягкая модалка конфликта (как в календаре).
+function doTakeOrder(id) {
+  const o = findOrderById(id);
+  if (!o) return;
+  if (!canTakeOrder(o)) { toast('Заявку нельзя взять', true); return; }
+  const probe = { date: o.date, t1: o.t1, t2: o.t2, worker: state.user };
+  const conflicts = (typeof checkTimeConflict === 'function') ? checkTimeConflict(probe) : [];
+  if (conflicts.length) {
+    window.__takePending = id;
+    showTakeConflictModal(conflicts);
+    return;
+  }
+  applyTakeOrder(id);
+}
+
+function applyTakeOrder(id) {
+  const o = findOrderById(id);
+  if (!o) return false;
+  const res = takeOrder(o);
+  if (!res.ok) { toast(res.reason, true); return false; }
+  toast('Заявка №' + id + ' взята в работу');
+  render();
+  return true;
+}
+
+// Пересечение при взятии — своя модалка: кнопка «Всё равно взять» относится
+// к назначению, а не к созданию заявки (data-force-order занят календарём).
+function showTakeConflictModal(conflicts) {
+  const nums = conflicts.map(function (o) { return '№' + o.id; }).join(', ');
+  showModal(
+    '<h3>⚠️ Пересечение по времени</h3>' +
+    '<p>У вас уже есть заявки в это время: <b>' + nums + '</b>.</p>' +
+    '<p class="small muted">Если это один подъезд или адреса рядом, брать можно.</p>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-force-take style="flex:1">✅ Всё равно взять</button>' +
+    '</div>'
+  );
+}
+
+// Приглашение соисполнителя: выбор из сотрудников, кроме занятых на этой заявке.
+function renderHelperModal(o) {
+  const taken = (o.helpers || []).concat(o.worker ? [o.worker] : []).concat([state.user]);
+  const names = (DB.users || [])
+    .map(function (u) { return u.name; })
+    .filter(function (n) { return n && taken.indexOf(n) < 0; });
+  if (!names.length) { toast('Все сотрудники уже на заявке', true); return; }
+  showModal(
+    '<h3>Соисполнитель к заявке №' + o.id + '</h3>' +
+    '<label class="field"><span>Сотрудник</span><select id="helper-name">' +
+      names.map(function (n) { return '<option value="' + escapeHtml(n) + '">' + escapeHtml(n) + '</option>'; }).join('') +
+    '</select></label>' +
+    '<p class="small muted">Сотрудник получит приглашение и должен подтвердить участие.</p>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-save-helper="' + o.id + '" style="flex:1">Пригласить</button>' +
+    '</div>'
+  );
 }
 
 // --- 4. Вкладка «Смета» (заглушка, перенесена в ui-estimate.js) ---
@@ -211,6 +326,45 @@ document.addEventListener('click', function (ev) {
 
   const overlay = sel('[data-modal-overlay]');
   if (overlay && ev.target === overlay) { closeModal(); return; }
+
+  // Кнопки пула и подтверждения стоят ВНУТРИ карточки [data-order], поэтому их
+  // проверяем раньше перехода по карточке — иначе клик откроет заявку.
+  const takeBtn = sel('[data-take-order]');
+  if (takeBtn) { doTakeOrder(Number(takeBtn.getAttribute('data-take-order'))); return; }
+
+  const confirmBtn = sel('[data-confirm-helper]');
+  if (confirmBtn) {
+    const parts = String(confirmBtn.getAttribute('data-confirm-helper')).split('|');
+    const o = findOrderById(Number(parts[0]));
+    if (o && confirmHelper(o, state.user, parts[1])) {
+      closeModal();
+      toast(parts[1] === 'ok' ? 'Участие подтверждено' : 'Вы отказались от заявки');
+      render();
+    } else {
+      toast('Подтверждение уже обработано', true);
+    }
+    return;
+  }
+
+  const addHelperBtn = sel('[data-add-helper]');
+  if (addHelperBtn) {
+    const o = findOrderById(Number(addHelperBtn.getAttribute('data-add-helper')));
+    if (o) renderHelperModal(o);
+    return;
+  }
+
+  const saveHelperBtn = sel('[data-save-helper]');
+  if (saveHelperBtn) {
+    const o = findOrderById(Number(saveHelperBtn.getAttribute('data-save-helper')));
+    const sel2 = document.getElementById('helper-name');
+    const name = sel2 ? sel2.value : '';
+    if (!o) return;
+    if (!assignHelper(o, name)) { toast('Не удалось пригласить сотрудника', true); return; }
+    closeModal();
+    toast(name + ' приглашён (ждёт подтверждения)');
+    render();
+    return;
+  }
 
   const card = sel('[data-order]');
   if (card) { ORD_TAB = 'main'; go('order', Number(card.getAttribute('data-order'))); return; }

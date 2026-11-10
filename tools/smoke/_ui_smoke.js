@@ -47,10 +47,12 @@ assert(listHtml.indexOf('data-filter="all"') >= 0 && listHtml.indexOf('data-filt
   'renderOrdersList: чипы-фильтры на месте');
 assert(listHtml.indexOf('data-create-modal') >= 0, 'renderOrdersList: кнопка ➕');
 assert(listHtml.indexOf('data-order=') >= 0, 'renderOrdersList: есть карточки заявок');
-assert(listHtml.split('data-order=').length - 1 === 4,
-  'worker видит только свои мок-заявки (гейт orders_view_all, Этап 5: 4 штуки)');
+// Этап 14: без orders_view_all worker видит свои + свободные из пула (Иванова — new без worker).
+assert.eq(listHtml.split('data-order=').length - 1, 5,
+  'worker: 4 свои + 1 из пула = 5 видимых карточек');
 assert(listHtml.indexOf('👷 МОЯ') >= 0, 'бейдж «МОЯ» у заявки Мастера');
 assert(listHtml.indexOf('class="list-item mine"') >= 0, '«моя» карточка помечена');
+assert(listHtml.indexOf('data-take-order=') >= 0, 'worker: у пул-заявки есть кнопка «Взять»');
 
 // --- фильтр «Сегодня»: считаем по ВИДИМОМУ воркером подмножеству
 state.filter = 'today';
@@ -80,11 +82,15 @@ assert(orderPassesFilter({ date: dateShift(localToday(), -1), status: 'canceled'
   'просрочка: отменённая не проходит');
 assert(orderPassesFilter({ date: localToday(), status: 'new' }, 'overdue') === false,
   'просрочка: сегодняшняя не проходит');
-// у видимых воркеру заявок просрочки нет (мок: просрочка Ивановой не назначена)
+// Этап 14: свободная заявка Ивановой (вчера, new, без worker) видима через пул → в просрочке.
 state.filter = 'overdue';
 const overdueHtml = renderOrdersList();
-assert(overdueHtml.indexOf('Заявок нет по этому фильтру') >= 0,
-  'worker: в его наборе нет просрочки — пустой список');
+assert.eq((overdueHtml.match(/data-order=/g) || []).length, 1,
+  'worker: просрочка = 1 (свободная заявка из пула)');
+state.filter = 'pool';
+const poolHtml = renderOrdersList();
+assert(poolHtml.indexOf('data-filter="pool"') >= 0, 'чип «Пул» на месте');
+assert.eq((poolHtml.match(/data-order=/g) || []).length, 1, 'пул worker: только свободные');
 state.filter = 'all';
 
 // --- admin видит все 4 заявки (гейт orders_view_all)

@@ -14,7 +14,7 @@ const STATUS_TRANSITIONS = {
   inspection: ['estimate', 'canceled'],               // осмотрщик составил смету
   estimate: ['approved', 'postponed', 'canceled'],    // клиент согласовал | отложил | отмена
   approved: ['inwork', 'canceled'],                   // назначен worker, тот принял
-  inwork: ['paused', 'completed', 'canceled'],
+  inwork: ['paused', 'completed', 'canceled', 'postponed'],  // Q4: перенос остатка
   paused: ['inwork', 'canceled'],                     // возобновить
   waiting: ['inwork', 'canceled'],
   postponed: ['estimate', 'approved', 'canceled'],    // возврат после отложения
@@ -31,6 +31,8 @@ function normalizeOrder(o) {
   if (!Array.isArray(o.materials)) o.materials = [];
   if (!Array.isArray(o.history)) o.history = [];
   if (!Array.isArray(o.payments)) o.payments = [];
+  // Подтверждение соисполнителя (Этап 14)
+  if (!o.confirm || typeof o.confirm !== 'object' || Array.isArray(o.confirm)) o.confirm = {};
   return o;
 }
 
@@ -186,4 +188,72 @@ function orderReward(o) {
   const pct = orderRewardPct(o);
   if (!pct) return 0;
   return Math.round(orderRevenue(o) * pct / 100);
+}
+
+// --- Пул и подтверждение соисл. (Этап 14) ---
+
+// Взять заявку в работу: назначить себя worker, записать факт, проверить доступ.
+// Возвращает { ok: true } или { ok: false, reason: '...' }.
+function takeOrder(o) {
+  if (!o) return { ok: false, reason: 'Нет заявки' };
+  if (o.worker) return { ok: false, reason: 'Исполнитель уже назначен' };
+  if (o.status !== 'new' && o.status !== 'inspection' && o.status !== 'approved') {
+    return { ok: false, reason: 'Статус не позволяет взять' };
+  }
+  if (o.helpers && o.helpers.indexOf(state.user) >= 0) {
+    return { ok: false, reason: 'Уже прикреплён как соисполнитель' };
+  }
+  o.worker = state.user;
+  o.takenAt = Date.now();
+  o.takenBy = state.user;
+  normalizeOrder(o);
+  o.history.push({
+    ts: Date.now(), by: state.user, action: 'take',
+    details: 'Заявка взята в работу'
+  });
+  saveOrderLocal(o);
+  return { ok: true };
+}
+
+// Назначить соисполнителя: добавить в helpers + pending-подтверждение.
+function assignHelper(o, helperName) {
+  if (!o || !helperName) return false;
+  if (helperName === state.user) return false;
+  if (!Array.isArray(o.helpers)) o.helpers = [];
+  if (o.helpers.indexOf(helperName) >= 0) return false;
+  normalizeOrder(o);
+  o.helpers.push(helperName);
+  o.confirm = o.confirm || {};
+  o.confirm[helperName] = 'pending';
+  o.history.push({
+    ts: Date.now(), by: state.user, action: 'assign_helper',
+    details: helperName + ' приглашён в соисполнители'
+  });
+  saveOrderLocal(o);
+  return true;
+}
+
+// Подтвердить соисполнителя: 'ok' или 'no'.
+function confirmHelper(o, helperName, decision) {
+  if (!o || !helperName || !o.confirm || !o.confirm[helperName]) return false;
+  if (o.confirm[helperName] !== 'pending') return false;
+  if (decision !== 'ok' && decision !== 'no') return false;
+  normalizeOrder(o);
+  if (decision === 'no') {
+    const idx = o.helpers.indexOf(helperName);
+    if (idx >= 0) o.helpers.splice(idx, 1);
+    delete o.confirm[helperName];
+    o.history.push({
+      ts: Date.now(), by: state.user, action: 'confirm_helper',
+      details: helperName + ' отказался'
+    });
+  } else {
+    o.confirm[helperName] = 'ok';
+    o.history.push({
+      ts: Date.now(), by: state.user, action: 'confirm_helper',
+      details: helperName + ' подтвердил'
+    });
+  }
+  saveOrderLocal(o);
+  return true;
 }
