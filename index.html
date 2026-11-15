@@ -30,11 +30,12 @@
   <!-- db.js первым: core.js вызывает localToday()/утилиты db сразу при загрузке -->
   <script src="app/db.js"></script>
   
-  <!-- Этап 21: синхронизация с Firestore (вызывает flushQueue из db.js save()) -->
-  <script src="app/sync.js"></script>
-  
   <script src="app/core.js"></script>
   <script src="app/auth.js"></script>
+  
+  <!-- Этап 21: синхронизация с Firestore — после firebase-config/auth, до ui-модулей -->
+  <script src="app/sync.js"></script>
+  
   <script src="app/gates.js"></script>
   <script src="app/orders.js"></script>
   <!-- app/notify.js — появится на следующем этапе -->

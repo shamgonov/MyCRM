@@ -50,12 +50,14 @@ function initSync() {
         var idx = (DB.orders || []).findIndex(function (o) {
           return Number(o.id) === Number(remote.id);
         });
+        // Незакоммиченная операция по этой заявке важнее облачной копии,
+        // НО если удалённая версия новее её (remote.ts > op.ts) — облако главнее.
+        var pending = null;
+        (DB.syncQueue || []).forEach(function (op) {
+          if (op.docId === String(remote.id)) pending = op;
+        });
+        if (pending && Number(remote.ts || 0) <= Number(pending.ts || 0)) return;
         if (idx >= 0) {
-          // Операция в очереди важнее облачной копии: локальную версию не затираем.
-          var pending = (DB.syncQueue || []).some(function (op) {
-            return op.docId === String(remote.id);
-          });
-          if (pending) return;
           DB.orders[idx] = sanitize(Object.assign({}, DB.orders[idx], remote));
         } else {
           DB.orders.push(sanitize(remote));
@@ -101,7 +103,14 @@ function queueOperation(op) {
     console.warn('queueOperation: невалидная операция', op);
     return false;
   }
-  op.ts = Date.now();
+  // Метка времени: момент создания операции (orderSave/orderPatch передают ts;
+  // прямые вызовы queueOperation получают её здесь).
+  if (!op.ts) op.ts = Date.now();
+  // Метка времени в самих данных: удалённый документ несёт ts, и onSnapshot
+  // может корректно решить, что главнее — облачная копия или локальная очередь.
+  if (op.data && typeof op.data === 'object' && !Array.isArray(op.data)) {
+    op.data.ts = op.ts;
+  }
   if (!Array.isArray(DB.syncQueue)) DB.syncQueue = [];
   DB.syncQueue.push(op);
   SYNC_PAUSED = false; // новое локальное изменение — пробуем отправлять снова
@@ -117,7 +126,8 @@ function orderSave(o) {
     type: 'save',
     collection: 'orders',
     docId: String(o.id),
-    data: sanitize(o)
+    data: sanitize(o),
+    ts: Date.now()
   });
 }
 
@@ -128,7 +138,8 @@ function orderPatch(id, fields) {
     type: 'patch',
     collection: 'orders',
     docId: String(id),
-    data: sanitize(fields)
+    data: sanitize(fields),
+    ts: Date.now()
   });
 }
 
