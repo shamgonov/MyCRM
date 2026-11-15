@@ -183,7 +183,39 @@ function renderOrderTabMain(o) {
       '<div class="muted">' + escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '</div>' +
     '</div>' +
     renderOrderTeamBlock(o, editable) +
-    statusBlock;
+    statusBlock +
+    renderFollowUpBlock(o, editable);
+}
+
+// Блок переноса остатка (Этап 15): связи родитель/дети + кнопка новой заявки.
+function renderFollowUpBlock(o, editable) {
+  const kids = (o.followUpIds || []).length;
+  const parent = o.parentId;
+  if (!editable && !kids && !parent) return '';
+
+  let links = '';
+  if (parent) {
+    links += '<div>Родитель: <b><span data-order="' + parent + '" style="color:var(--accent);cursor:pointer">№' +
+      parent + '</span></b></div>';
+  }
+  if (kids) {
+    links += '<div class="muted">Дочерние: ' + (o.followUpIds || []).map(function (id) {
+      const child = (DB.orders || []).find(function (x) { return x.id === id; });
+      const num = (typeof orderDisplayNumber === 'function' && child) ? orderDisplayNumber(child) : id;
+      return '<span data-order="' + id + '" style="color:var(--accent);cursor:pointer">№' + num + '</span>';
+    }).join(', ') + '</div>';
+  }
+
+  const btn = editable
+    ? '<button class="btn" data-followup="' + o.id + '" style="margin-top:8px">🔄 Перенести остаток</button>'
+    : '';
+
+  return '<div class="card info-block">' +
+      '<h4>Перенос остатка</h4>' +
+      (links || '<p class="small muted">Связанных заявок нет.</p>') +
+      '<p class="small muted">Работы «в работе» и материалы «нужно купить» уйдут в новую заявку.</p>' +
+      btn +
+    '</div>';
 }
 
 // Подпись статуса подтверждения соисполнителя.
@@ -289,6 +321,30 @@ function renderHelperModal(o) {
   );
 }
 
+// --- Перенос остатка: модалка (Этап 15) ---
+
+function renderFollowUpModal(o) {
+  showModal(
+    '<h3>Перенос остатка заявки №' + o.id + '</h3>' +
+    '<p class="small muted">Работы «в работе» и материалы «нужно купить» уйдут в новую заявку. ' +
+    'Выполненные строки войдут в промежуточный акт.</p>' +
+    '<label class="field"><span>Дата новой заявки</span>' +
+      '<input id="fu-date" type="date" value="' + (o.date || localToday()) + '"></label>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-create-followup="' + o.id + '" style="flex:1">Создать дочернюю</button>' +
+    '</div>'
+  );
+}
+
+// Перенос остатка: открываем модалку, либо сразу создаём (без даты).
+function doFollowUp(id) {
+  var o = findOrderById(id);
+  if (!o) return;
+  if (!canEditOrder(o)) { toast('Нельзя переносить', true); return; }
+  renderFollowUpModal(o);
+}
+
 // --- 4. Вкладка «Смета» (заглушка, перенесена в ui-estimate.js) ---
 
 // renderEstimateTab подключён из ui-estimate.js (Этап 6)
@@ -375,6 +431,25 @@ document.addEventListener('click', function (ev) {
     if (!assignHelper(o, name)) { toast('Не удалось пригласить сотрудника', true); return; }
     closeModal();
     toast(name + ' приглашён (ждёт подтверждения)');
+    render();
+    return;
+  }
+
+  const followupBtn = sel('[data-followup]');
+  if (followupBtn) { doFollowUp(Number(followupBtn.getAttribute('data-followup'))); return; }
+
+  const createFollowupBtn = sel('[data-create-followup]');
+  if (createFollowupBtn) {
+    var o = findOrderById(Number(createFollowupBtn.getAttribute('data-create-followup')));
+    if (!o) return;
+    var val = function (id) {
+      var el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    };
+    var child = createFollowUpOrder(o, { date: val('fu-date') || localToday() });
+    if (!child) { toast('Не удалось создать дочернюю заявку', true); return; }
+    closeModal();
+    toast('Создана дочерняя заявка №' + orderDisplayNumber(child));
     render();
     return;
   }

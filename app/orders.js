@@ -257,3 +257,64 @@ function confirmHelper(o, helperName, decision) {
   saveOrderLocal(o);
   return true;
 }
+
+// --- Перенос остатка: дочерняя заявка (Этап 15) ---
+
+// Отображаемый номер заявки: дочерняя — «279/1», обычная — «279».
+// Числовой o.id остаётся ключом в DB.orders; дробный номер только для показа.
+function orderDisplayNumber(o) {
+  if (!o) return '';
+  if (o.parentId && o.childNo) return o.parentId + '/' + o.childNo;
+  return String(o.id);
+}
+
+// createFollowUpOrder(parent, data): перенос невыполненного остатка в новую
+// дочернюю заявку. Копирует работы без done/skipped и материалы needed,
+// наследует клиента/адрес, связывает родителя и ребёнка в обе стороны.
+function createFollowUpOrder(parent, data) {
+  if (!parent) return null;
+  var d = data || {};
+  normalizeOrder(parent);
+  if (!Array.isArray(parent.followUpIds)) parent.followUpIds = [];
+  var childNo = parent.followUpIds.length + 1;
+
+  var clone = function (x) { return Object.assign({}, x); };
+  var restWorks = (parent.works || [])
+    .filter(function (w) { return !w.done && !w.skipped; })
+    .map(clone);
+  var restMats = (parent.materials || [])
+    .filter(function (m) { return m.status === 'needed'; })
+    .map(clone);
+
+  var child = createOrder({
+    client: parent.client,
+    phone: parent.phone,
+    city: parent.city,
+    address: parent.address,
+    date: d.date || parent.date,
+    t1: d.t1 !== undefined ? d.t1 : (parent.t1 || ''),
+    t2: d.t2 !== undefined ? d.t2 : (parent.t2 || ''),
+    status: d.status || 'new',
+    worker: parent.worker || '',
+    kind: parent.kind,
+    works: restWorks,
+    materials: restMats,
+    parentId: parent.id,
+    childNo: childNo
+  });
+  if (!child) return null;
+
+  parent.followUpIds.push(child.id);
+  parent.history.push({
+    ts: Date.now(), by: state.user, action: 'followup',
+    details: 'Остаток перенесён в заявку №' + orderDisplayNumber(child)
+  });
+  saveOrderLocal(parent);
+
+  child.history.push({
+    ts: Date.now(), by: state.user, action: 'inherit',
+    details: 'Создана из остатка заявки №' + parent.id
+  });
+  saveOrderLocal(child);
+  return child;
+}

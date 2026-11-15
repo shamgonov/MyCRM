@@ -207,8 +207,11 @@ function renderInvoice(o) {
 
 // --- 5. Акт выполненных работ ---
 
-function renderAct(o) {
+// renderAct(o, opts): opts.partial = true → промежуточный акт (Этап 15):
+// только выполненные строки + пометка, что остаток перенесён в дочерние заявки.
+function renderAct(o, opts) {
   if (!o) return '<p class="muted">Нет данных заявки.</p>';
+  const partial = !!(opts && opts.partial);
   const actNum = o.docActNumber || generateDocNumber();
   const invoiceNum = o.docInvoiceNumber || '—';
   const exec = getExecutorRequisites();
@@ -222,7 +225,20 @@ function renderAct(o) {
       '<div class="pay-line"><b>К оплате: ' + money(Math.max(0, total - paid)) + '</b></div>'
     : '';
 
-  return docShell('АКТ ВЫПОЛНЕННЫХ РАБОТ', actNum,
+  // Промежуточный акт: перечисляем дочерние заявки, куда перенесён остаток.
+  let carryBlock = '';
+  if (partial) {
+    const kids = (o.followUpIds || []).map(function (id) {
+      const child = (DB.orders || []).find(function (x) { return x.id === id; });
+      return child ? '№' + orderDisplayNumber(child) : '№' + id;
+    });
+    carryBlock = '<div class="pay-line"><b>Остаток перенесён' +
+      (kids.length ? ' в заявку ' + kids.join(', ') : '') + '.</b></div>' +
+      '<p class="small">Настоящий акт подтверждает частично выполненные работы; ' +
+      'невыполненный объём подлежит выполнению по дочерней заявке.</p>';
+  }
+
+  return docShell(partial ? 'ПРОМЕЖУТОЧНЫЙ АКТ ВЫПОЛНЕННЫХ РАБОТ' : 'АКТ ВЫПОЛНЕННЫХ РАБОТ', actNum,
     '<div class="doc-date">к Смете № ' + escapeHtml(invoiceNum) + '</div>' +
     '<div class="parties">' +
       docParty('Исполнитель', exec) +
@@ -230,11 +246,14 @@ function renderAct(o) {
     '</div>' +
     '<div class="small"><b>Адрес объекта:</b> ' +
       escapeHtml([o.city, o.address].filter(Boolean).join(', ') || '—') + '</div>' +
-    '<p class="small">Работы выполнены в соответствии со сметой. Заказчик претензий по объёму, ' +
-      'качеству и срокам не имеет.</p>' +
+    '<p class="small">' + (partial
+      ? 'Работы выполнены частично в соответствии со сметой. Заказчик претензий по объёму, ' +
+        'качеству и срокам выполненной части не имеет.'
+      : 'Работы выполнены в соответствии со сметой. Заказчик претензий по объёму, ' +
+        'качеству и срокам не имеет.') + '</p>' +
     docTable(rows) +
     '<div class="doc-total">Итого выполнено: ' + money(total) + '</div>' +
-    payBlock +
+    payBlock + carryBlock +
     docSignatures(exec, client));
 }
 
