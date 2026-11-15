@@ -89,7 +89,9 @@ function saveOrderLocal(o) {
     }
     DB.orders.push(o);
   }
-  save();
+  // Этап 21: если sync.js загружен — отправить в Firestore, иначе локально
+  if (typeof window.orderSave === 'function') { window.orderSave(o); }
+  else { save(); }
   return o;
 }
 

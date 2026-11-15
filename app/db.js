@@ -218,6 +218,8 @@ function load() {
   if (!Array.isArray(DB.suppliers)) DB.suppliers = [];
   // Задачи органайзера (Этап 20): в старых базах коллекции нет.
   if (!Array.isArray(DB.tasks)) DB.tasks = [];
+  // Очередь синхронизации (Этап 21): в старых базах коллекции нет.
+  if (!Array.isArray(DB.syncQueue)) DB.syncQueue = [];
   // Реквизиты и счётчик документов появились на Этапе 8.
   const defSettings = defaultData().settings;
   if (!DB.settings || typeof DB.settings !== 'object') DB.settings = defSettings;
@@ -244,6 +246,8 @@ function save() {
     // localStorage недоступен (private mode / переполнение) — работаем в памяти.
   }
   if (typeof window.__onSave === 'function') window.__onSave(); // хук для sync.js (Этап 2)
+  // Этап 21: если sync.js загружен — отправить очередь в Firestore
+  if (typeof window.flushQueue === 'function') { window.flushQueue(); }
 }
 
 load();
