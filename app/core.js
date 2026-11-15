@@ -171,9 +171,12 @@ const S = {
     return '<h2>📇 Контрагенты</h2><p class="muted">Модуль UI ещё не загружен.</p>';
   },
   overdue: function () {
+    // Экран «Требует внимания» (Этап 19) живёт в ui-attention.js — ленивая
+    // обёртка, чтобы список заявок работал и без этого модуля.
+    if (typeof renderAttention === 'function') return renderAttention();
     return '<h2>⏰ Просроченные заявки</h2>' +
       '<div class="card">' +
-        '<p class="muted">Экран в разработке (Этап 9).</p>' +
+        '<p class="muted">Модуль UI ещё не загружен.</p>' +
         '<p class="small">Здесь будут заявки с просроченной датой.</p>' +
       '</div>';
   },

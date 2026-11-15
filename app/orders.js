@@ -17,7 +17,7 @@ const MAT_PLACE_LABELS = {
 
 // Матрица переходов (SPEC: статусы и переходы, включая ветку C без осмотра).
 const STATUS_TRANSITIONS = {
-  new: ['inspection', 'approved', 'canceled'],        // approved = ветка C (цена и аванс по телефону)
+  new: ['inspection', 'approved', 'postponed', 'canceled'],        // + Этап 19: postponed из new
   inspection: ['estimate', 'canceled'],               // осмотрщик составил смету
   estimate: ['approved', 'postponed', 'canceled'],    // клиент согласовал | отложил | отмена
   approved: ['inwork', 'canceled'],                   // назначен worker, тот принял
@@ -42,6 +42,8 @@ function normalizeOrder(o) {
   if (!o.confirm || typeof o.confirm !== 'object' || Array.isArray(o.confirm)) o.confirm = {};
   // Теги проблемы (Этап 17)
   if (!Array.isArray(o.tags)) o.tags = [];
+  // Время перезвона по итогам звонка (Этап 19): null = не назначен.
+  if (!o.callbackAt) o.callbackAt = null;
   // Локация и поставщик материала (Этап 18).
   (o.materials || []).forEach(function (m) {
     if (!m) return;

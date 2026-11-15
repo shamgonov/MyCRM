@@ -1,7 +1,7 @@
-# CRM2 — сводный план остатка (Этапы 19–21)
+# CRM2 — сводный план остатка (Этапы 20–21)
 
 Документ-ориентир. Актуален вместо `SPEC.md` (тот — застывший мастер-промпт, расходится с кодом).
-Готовое: Этапы 0–18, 15 модулей `app/`, `SMOKE: pass=1002 fail=0`, `GATE OK`.
+Готовое: Этапы 0–19, 16 модулей `app/`, `SMOKE: pass=1108 fail=0`, `GATE OK`.
 
 ## Решённые вопросы Q1–Q6 (приняты, реализованы)
 
@@ -24,7 +24,8 @@
 | 15 | «🔄 Перенести остаток», дочерняя заявка №279/1, промежуточный акт | 089909a |
 | 16 | Контрагенты: справочник, дедуп, история, досье, выбор в заявке, реквизиты в документах | 8283572 |
 | 17 | Теги проблем (чипы + фильтр), шаблоны смет (сохранить/применить), дедуп услуг в прайсе | 948c037 |
-| 18 | Поставщики (CRUD в админке), локация материалов (place/supplierId), группировка, маршрут + навигатор, шаринг списка закупок | (этот коммит) |
+| 18 | Поставщики (CRUD в админке), локация материалов (place/supplierId), группировка, маршрут + навигатор, шаринг списка закупок | 8b2d5a0 |
+| 19 | «⚠️ Требует внимания» (`app/ui-attention.js`), «Итог звонка» (6 веток, `o.callbackAt`), дайджест 08:30, new→postponed | (этот коммит) |
 
 ---
 
@@ -43,7 +44,7 @@
 - Проверка: `node tools/check-modules.js && node tools/smoke/run.js && node --check app/<новый>.js`.
 - Если якорь для правки не найден — СТОП, спросить, не выдумывать.
 
-### Текущая модель данных (итог Этапов 12–18)
+### Текущая модель данных (итог Этапов 12–19)
 - `o.payments[]` — `{ id, sum, date, method:'cash'|'card'|'transfer', by, note }`.
 - `o.confirm = { имя: 'pending'|'ok'|'no' }`, `o.takenAt`, `o.takenBy`.
 - `o.moneyReminderAt`, `o.rewardPct` (переопределяет `DB.settings.rewardPctDefault`).
@@ -51,10 +52,12 @@
 - `o.clientId`, `o.clientLegal` — привязка к контрагенту (Этап 16).
 - `o.tags[]` — теги проблемы; пресеты в `DB.settings.tagPresets` (Этап 17).
 - `o.routeIgnored = { ключ: true }` — «игнорировать точку маршрута» (Этап 18).
+- `o.callbackAt` — timestamp перезвона по «Итогу звонка»; null = не назначен (Этап 19).
 - `DB.templates[{ id, name, kind:'estimate', works:[{ name, qty, unit, price, coeff }], tags[] }]` (Этап 17).
 - `DB.suppliers[{ id, name, phone, address, hours, note }]` (Этап 18).
 - `DB.clients[{ id, kind:'person'|'ip'|'company', name, inn, kpp, ogrn, phone, email, city, address, notes, orderIds[], createdAt, createdBy }]`.
 - `DB.settings.warehouseAddress` — адрес склада для маршрута закупки (Этап 18).
+- `DB.settings.digestShownToday` — дата показанного утреннего дайджеста (Этап 19).
 - База суммы одна: `calculateOrderTotal()` (работы × coeff + agreed доп. + материалы при `matsInTotal`).
 - Функции: `orderRevenue/orderPaid/orderBalance`, `addPayment/removePayment`,
   `orderRewardPct/orderReward`, `takeOrder/assignHelper/confirmHelper`,
@@ -63,20 +66,13 @@
   `findSimilarPriceItems/wordLooksSimilar/levenshtein`,
   `saveSupplier/deleteSupplier/findSupplier`,
   `materialGroupKey/materialGroupLabel/groupMaterialsBySupplier`,
-  `buildPurchaseRoute/navigatorUrl`, `MAT_PLACES`, `MAT_PLACE_LABELS`.
+  `buildPurchaseRoute/navigatorUrl`, `MAT_PLACES`, `MAT_PLACE_LABELS`,
+  `renderAttention/attentionGroups/isCallbackDue`,
+  `renderCallResultModal/applyCallResult/CALL_BRANCHES`,
+  `buildDigestText/maybeDigest` (notify.js).
 
 ### Осталось пустовать
 - Пустых коллекций в модели нет: `DB.suppliers` ведётся в админке (Этап 18).
-
----
-
-## Этап 19 — «⚠️ Требует внимания», «Итог звонка», дайджест
-
-- Заменить заглушку `S.overdue` (`app/core.js`) на «Требует внимания»: просроченная дата; не назначен исполнитель; остаток к оплате после `completed` (`o.moneyReminderAt`); материалы `needed` на сегодня; соисполнитель не подтвердил (`o.confirm[имя]='pending'`).
-- Дайджест 08:30 в `scheduleChecks()` (`app/notify.js`) — одно сводное системное уведомление; эскалация неотработанного — владельцу.
-- «Итог звонка» (модалка при статусе `new`/`inspection`), 6 веток: не дозвонился / перезвонить позже / договорились об осмотре / согласована смета / отложено / отказ. «Не дозвонился» и «перезвонить позже» → `o.callbackAt` = +N часов, авто-напоминание (новый kind в `buildReminders`).
-
-**Смоук:** `_attention_smoke.js`.
 
 ---
 
@@ -98,5 +94,5 @@
 
 ## Порядок работ
 
-19 → 20 (21 — по отдельному решению).
+20 (21 — по отдельному решению).
 Каждый этап — отдельный коммит; перед коммитом полный прогон проверок.

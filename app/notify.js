@@ -13,7 +13,8 @@ const REMINDER_LABELS = {
   upcoming: '⏰ Скоро',
   today: '📅 Сегодня',
   material: '🧱 Материалы',
-  balance: '💰 Остаток'
+  balance: '💰 Остаток',
+  callback: '📞 Перезвонить'
 };
 
 // Ключ localStorage: { "<kind>:<orderId>": "YYYY-MM-DD" } — напоминание скрыто на день.
@@ -151,12 +152,63 @@ function buildReminders(orders) {
       }
     });
   }
+
+  // Перезвон по итогам звонка (Этап 19): callbackAt наступил, статус ещё рабочий.
+  (DB.orders || []).forEach(function (o) {
+    if (!o.callbackAt || now.getTime() < Number(o.callbackAt)) return;
+    if (o.status !== 'new' && o.status !== 'inspection') return;
+    if (typeof canViewOrder === 'function' && !canViewOrder(o)) return;
+    const key = reminderKey('callback', o.id);
+    if (seenToday(key)) return;
+    out.push({
+      orderId: o.id, key: key, kind: 'callback',
+      title: '№' + o.id + ' ' + (o.client || ''),
+      when: 'нужен перезвон'
+    });
+  });
   return out;
 }
 
 // --- 3. Периодическая проверка ---
 
 var NOTIFY_TIMER = null;
+
+// Час утреннего дайджеста и окно «±5 минут» (Этап 19).
+const DIGEST_MINUTES = 8 * 60 + 30;
+const DIGEST_WINDOW_MIN = 5;
+
+// Сводный текст дайджеста по списку напоминаний: «📋 Дайджест: N …, M …».
+function buildDigestText(items) {
+  const counts = {};
+  items.forEach(function (r) { counts[r.kind] = (counts[r.kind] || 0) + 1; });
+  const parts = Object.keys(REMINDER_LABELS)
+    .filter(function (k) { return counts[k]; })
+    .map(function (k) {
+      // Подпись без эмодзи: в тексте дайджеста оставляем только слово.
+      return counts[k] + ' ' + String(REMINDER_LABELS[k]).replace(/^[^\s]+\s*/, '').toLowerCase();
+    });
+  if (!parts.length) return '';
+  return '📋 Дайджест: ' + parts.join(', ');
+}
+
+// maybeDigest(now): одно сводное уведомление около 08:30, не чаще раза в день.
+function maybeDigest(now) {
+  const d = now || new Date();
+  const mins = d.getHours() * 60 + d.getMinutes();
+  if (Math.abs(mins - DIGEST_MINUTES) > DIGEST_WINDOW_MIN) return null;
+  if (!DB || !DB.settings) return null;
+  if (DB.settings.digestShownToday === localToday()) return null;
+
+  const items = buildReminders(getUpcomingOrders());
+  DB.settings.digestShownToday = localToday();
+  save();
+  if (!items.length) return 0;
+  const text = buildDigestText(items);
+  if (!text) return 0;
+  const sent = showSystemNotification('CRM2 — утренний дайджест', text);
+  items.forEach(function (r) { markSeen(r.key); }); // сводка заменила отдельные уведомления
+  return sent ? items.length : 0;
+}
 
 // scheduleChecks(intervalSec): пересчёт напоминаний по таймеру (не чаще 60 сек).
 // Новые напоминания уходят в системное уведомление и помечаются показанными.
@@ -169,10 +221,22 @@ function scheduleChecks(intervalSec) {
 }
 
 function notifyTick() {
+  // Утренний дайджест важнее потока отдельных уведомлений (Этап 19).
+  if (maybeDigest() !== null) {
+    if (typeof state !== 'undefined' && state.screen === 'orders' && typeof render === 'function') {
+      render();
+    }
+    return 0;
+  }
   const fresh = buildReminders(getUpcomingOrders());
   fresh.forEach(function (r) {
     showSystemNotification(REMINDER_LABELS[r.kind] || 'CRM2', r.title + ' · ' + r.when);
     markSeen(r.key); // не дублируем уведомление об одном заказе в тот же день
+    // Перезвон показан — напоминание отработано, снимаем flag (Этап 19).
+    if (r.kind === 'callback') {
+      const o = (DB.orders || []).find(function (x) { return x.id === r.orderId; });
+      if (o) { o.callbackAt = null; saveOrderLocal(o); }
+    }
   });
   if (typeof state !== 'undefined' && state.screen === 'orders' && typeof render === 'function') {
     render();

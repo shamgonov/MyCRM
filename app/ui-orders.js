@@ -211,6 +211,12 @@ function renderOrderTabMain(o) {
       '<div><a href="tel:' + escapeHtml(o.phone || '') + '">' + escapeHtml(o.phone || '—') + '</a></div>' +
       '<div class="muted">' + escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '</div>' +
     '</div>' +
+    (editable && (o.status === 'new' || o.status === 'inspection')
+      ? '<div class="card" style="margin-top:8px">' +
+          '<button class="btn btn-block" data-call-result="start">' +
+            '📞 Итог звонка</button>' +
+        '</div>'
+      : '') +
     renderOrderTagsBlock(o, editable) +
     renderOrderRouteBlock(o, editable) +
     renderOrderTeamBlock(o, editable) +
@@ -542,6 +548,19 @@ document.addEventListener('click', function (ev) {
 
   const followupBtn = sel('[data-followup]');
   if (followupBtn) { doFollowUp(Number(followupBtn.getAttribute('data-followup'))); return; }
+
+  // «Итог звонка» (Этап 19): модуль ui-attention.js может не загрузиться.
+  const callBtn = sel('[data-call-result="start"]');
+  if (callBtn) {
+    const o = findOrderById(state.orderId);
+    if (!o) return;
+    if (typeof renderCallResultModal !== 'function') {
+      toast('Модуль «Итог звонка» не загружен', true);
+      return;
+    }
+    renderCallResultModal(o);
+    return;
+  }
 
   const createFollowupBtn = sel('[data-create-followup]');
   if (createFollowupBtn) {

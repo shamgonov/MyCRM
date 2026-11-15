@@ -27,9 +27,11 @@ assert.eq(ORDER_STATUSES.length, 11, 'ORDER_STATUSES: 11 статусов');
 });
 
 // --- STATUS_TRANSITIONS: ключевая матрица из SPEC
-assert.eq(STATUS_TRANSITIONS.new.length, 3, 'new → 3 перехода (включая ветку C)');
+// Этап 19: из new добавлен postponed (ветка «Отложено» в «Итоге звонка»).
+assert.eq(STATUS_TRANSITIONS.new.length, 4, 'new → 4 перехода (ветка C + postponed)');
 assert(STATUS_TRANSITIONS.new.indexOf('approved') >= 0, 'ветка C: new → approved');
 assert(STATUS_TRANSITIONS.new.indexOf('inspection') >= 0, 'new → inspection');
+assert(STATUS_TRANSITIONS.new.indexOf('postponed') >= 0, 'Этап 19: new → postponed');
 assert(STATUS_TRANSITIONS.estimate.indexOf('approved') >= 0, 'estimate → approved');
 assert(STATUS_TRANSITIONS.estimate.indexOf('postponed') >= 0, 'estimate → postponed');
 assert.eq(JSON.stringify(STATUS_TRANSITIONS.paid), '[]', 'paid — терминальный');
