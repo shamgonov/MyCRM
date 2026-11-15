@@ -62,6 +62,7 @@ function defaultData() {
     orders: [],
     users: [],
     clients: [],
+    suppliers: [],
     templates: [],
     priceList: [
       { id: 1, name: 'Замена уплотнителя ПВХ', category: 'Окна', basePrice: 900, unit: 'пог.м', defaultQty: 1 },
@@ -83,6 +84,7 @@ function defaultData() {
       remindBeforeH: 2, // за сколько часов до визита напоминать (Этап 9)
       rewardPctDefault: 0, // доля исполнителя по умолчанию, % (Этап 13; 0 = выключено)
       tagPresets: ['Стекло', 'Фурнитура', 'Замер', 'Гарантия', 'Срочно'], // теги проблем (Этап 17)
+      warehouseAddress: '', // адрес склада для маршрута закупки (Этап 18)
       notifyEnabled: false // пользователь согласился на системные уведомления
     },
     regions: [{
@@ -200,6 +202,8 @@ function load() {
   if (!Array.isArray(DB.priceList)) DB.priceList = defaultData().priceList;
   // Шаблоны смет (Этап 17): в старых базах коллекции нет.
   if (!Array.isArray(DB.templates)) DB.templates = [];
+  // Поставщики (Этап 18): в старых базах коллекции нет.
+  if (!Array.isArray(DB.suppliers)) DB.suppliers = [];
   // Реквизиты и счётчик документов появились на Этапе 8.
   const defSettings = defaultData().settings;
   if (!DB.settings || typeof DB.settings !== 'object') DB.settings = defSettings;

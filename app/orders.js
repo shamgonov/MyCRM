@@ -8,6 +8,13 @@ const ORDER_STATUSES = [
   'waiting', 'postponed', 'completed', 'paid', 'canceled'
 ];
 
+// Локации материала (Этап 18): багажник / поставщик / склад / у заказчика.
+const MAT_PLACES = ['trunk', 'supplier', 'warehouse', 'client'];
+const MAT_PLACE_LABELS = {
+  trunk: '🚗 Багажник', supplier: '🏪 Поставщик',
+  warehouse: '🏭 Склад', client: '🏠 У заказчика'
+};
+
 // Матрица переходов (SPEC: статусы и переходы, включая ветку C без осмотра).
 const STATUS_TRANSITIONS = {
   new: ['inspection', 'approved', 'canceled'],        // approved = ветка C (цена и аванс по телефону)
@@ -35,6 +42,12 @@ function normalizeOrder(o) {
   if (!o.confirm || typeof o.confirm !== 'object' || Array.isArray(o.confirm)) o.confirm = {};
   // Теги проблемы (Этап 17)
   if (!Array.isArray(o.tags)) o.tags = [];
+  // Локация и поставщик материала (Этап 18).
+  (o.materials || []).forEach(function (m) {
+    if (!m) return;
+    if (MAT_PLACES.indexOf(m.place) < 0) m.place = 'supplier';
+    if (m.supplierId === undefined) m.supplierId = null;
+  });
   return o;
 }
 
@@ -396,4 +409,127 @@ function applyTemplate(o, templateId) {
   o.tags = (tpl.tags || []).slice();
   saveOrderLocal(o);
   return true;
+}
+
+// --- Поставщики и маршрут закупки (Этап 18) ---
+
+// Создать/обновить поставщика: без id — новая запись, с id — правка.
+function saveSupplier(data) {
+  if (!data || !data.name) return null;
+  if (!Array.isArray(DB.suppliers)) DB.suppliers = [];
+  let s = null;
+  if (data.id !== undefined && data.id !== null && data.id !== '') {
+    s = DB.suppliers.find(function (x) { return String(x.id) === String(data.id); });
+  }
+  if (s) {
+    s.name = data.name;
+    s.phone = data.phone || '';
+    s.address = data.address || '';
+    s.hours = data.hours || '';
+    s.note = data.note || '';
+  } else {
+    s = {
+      id: 'sup' + Date.now(),
+      name: data.name,
+      phone: data.phone || '',
+      address: data.address || '',
+      hours: data.hours || '',
+      note: data.note || ''
+    };
+    DB.suppliers.push(s);
+  }
+  save();
+  return s;
+}
+
+function deleteSupplier(id) {
+  const idx = (DB.suppliers || []).findIndex(function (s) { return String(s.id) === String(id); });
+  if (idx < 0) return false;
+  DB.suppliers.splice(idx, 1);
+  save();
+  return true;
+}
+
+function findSupplier(id) {
+  if (id === null || id === undefined || id === '') return null;
+  return (DB.suppliers || []).find(function (s) { return String(s.id) === String(id); }) || null;
+}
+
+// Ключ группировки материала: поставщик, иначе — локация.
+function materialGroupKey(m) {
+  if (m && m.place === 'supplier' && m.supplierId) return 'supplier:' + m.supplierId;
+  return 'place:' + ((m && m.place) || 'supplier');
+}
+
+function materialGroupLabel(key) {
+  if (key.indexOf('supplier:') === 0) {
+    const s = findSupplier(key.slice(9));
+    return '🏪 ' + ((s && s.name) || 'Поставщик удалён') +
+      (s && s.hours ? ' · ' + s.hours : '') +
+      (s && s.phone ? ' · ' + s.phone : '');
+  }
+  const place = key.slice(6);
+  return MAT_PLACE_LABELS[place] || place;
+}
+
+// Группировка плоского списка закупок [{o, m, idx}] по поставщикам/локациям.
+// Порядок групп: сначала «купить у поставщика», затем остальные локации.
+function groupMaterialsBySupplier(items) {
+  const map = {};
+  const order = [];
+  (items || []).forEach(function (it) {
+    const key = materialGroupKey(it.m);
+    if (!map[key]) { map[key] = []; order.push(key); }
+    map[key].push(it);
+  });
+  order.sort(function (a, b) {
+    const rank = function (k) { return k.indexOf('supplier:') === 0 ? 0 : 1; };
+    return rank(a) - rank(b) || materialGroupLabel(a).localeCompare(materialGroupLabel(b), 'ru');
+  });
+  return order.map(function (k) { return { key: k, label: materialGroupLabel(k), items: map[k] }; });
+}
+
+// Точки маршрута закупки заявки: поставщики материалов + склад (если есть).
+// ignore — объект m.routeIgnored { ключ: true } «игнорировать точку».
+function buildPurchaseRoute(o, ignore) {
+  if (!o) return [];
+  const ig = ignore || {};
+  const points = [];
+  const seen = {};
+  (o.materials || []).forEach(function (m) {
+    if (!m || m.place !== 'supplier' || m.status !== 'needed') return;
+    const key = materialGroupKey(m);
+    if (seen[key]) return;
+    seen[key] = true;
+    const s = findSupplier(m.supplierId);
+    points.push({
+      key: key,
+      title: (s && s.name) || 'Поставщик не указан',
+      address: (s && s.address) || '',
+      phone: (s && s.phone) || '',
+      ignored: !!ig[key]
+    });
+  });
+  const hasWarehouse = (o.materials || []).some(function (m) {
+    return m && m.place === 'warehouse' && m.status === 'needed';
+  });
+  if (hasWarehouse) {
+    points.push({
+      key: 'place:warehouse',
+      title: 'Склад',
+      address: (DB.settings && DB.settings.warehouseAddress) || '',
+      phone: '',
+      ignored: !!ig['place:warehouse']
+    });
+  }
+  return points;
+}
+
+// URL навигатора (веб-версии, без библиотек): адрес → строка поиска карт.
+function navigatorUrl(kind, address) {
+  const q = encodeURIComponent(String(address || '').trim());
+  if (!q) return '';
+  if (kind === '2gis') return 'https://2gis.ru/search/' + q;
+  if (kind === 'google') return 'https://www.google.com/maps/search/?api=1&query=' + q;
+  return 'https://yandex.ru/maps/?text=' + q; // yandex по умолчанию
 }

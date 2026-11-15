@@ -1,7 +1,7 @@
-# CRM2 — сводный план остатка (Этапы 18–21)
+# CRM2 — сводный план остатка (Этапы 19–21)
 
 Документ-ориентир. Актуален вместо `SPEC.md` (тот — застывший мастер-промпт, расходится с кодом).
-Готовое: Этапы 0–17, 15 модулей `app/`, `SMOKE: pass=917 fail=0`, `GATE OK`.
+Готовое: Этапы 0–18, 15 модулей `app/`, `SMOKE: pass=1002 fail=0`, `GATE OK`.
 
 ## Решённые вопросы Q1–Q6 (приняты, реализованы)
 
@@ -23,7 +23,8 @@
 | 14 | Пул, «✋ Взять в работу», подтверждение соисполнителя (o.confirm), inwork→postponed | 49ee54e |
 | 15 | «🔄 Перенести остаток», дочерняя заявка №279/1, промежуточный акт | 089909a |
 | 16 | Контрагенты: справочник, дедуп, история, досье, выбор в заявке, реквизиты в документах | 8283572 |
-| 17 | Теги проблем (чипы + фильтр), шаблоны смет (сохранить/применить), дедуп услуг в прайсе | (этот коммит) |
+| 17 | Теги проблем (чипы + фильтр), шаблоны смет (сохранить/применить), дедуп услуг в прайсе | 948c037 |
+| 18 | Поставщики (CRUD в админке), локация материалов (place/supplierId), группировка, маршрут + навигатор, шаринг списка закупок | (этот коммит) |
 
 ---
 
@@ -42,35 +43,30 @@
 - Проверка: `node tools/check-modules.js && node tools/smoke/run.js && node --check app/<новый>.js`.
 - Если якорь для правки не найден — СТОП, спросить, не выдумывать.
 
-### Текущая модель данных (итог Этапов 12–17)
+### Текущая модель данных (итог Этапов 12–18)
 - `o.payments[]` — `{ id, sum, date, method:'cash'|'card'|'transfer', by, note }`.
 - `o.confirm = { имя: 'pending'|'ok'|'no' }`, `o.takenAt`, `o.takenBy`.
 - `o.moneyReminderAt`, `o.rewardPct` (переопределяет `DB.settings.rewardPctDefault`).
 - `o.parentId`, `o.childNo`, `o.followUpIds[]` — связи переноса остатка.
 - `o.clientId`, `o.clientLegal` — привязка к контрагенту (Этап 16).
 - `o.tags[]` — теги проблемы; пресеты в `DB.settings.tagPresets` (Этап 17).
+- `o.routeIgnored = { ключ: true }` — «игнорировать точку маршрута» (Этап 18).
 - `DB.templates[{ id, name, kind:'estimate', works:[{ name, qty, unit, price, coeff }], tags[] }]` (Этап 17).
+- `DB.suppliers[{ id, name, phone, address, hours, note }]` (Этап 18).
 - `DB.clients[{ id, kind:'person'|'ip'|'company', name, inn, kpp, ogrn, phone, email, city, address, notes, orderIds[], createdAt, createdBy }]`.
+- `DB.settings.warehouseAddress` — адрес склада для маршрута закупки (Этап 18).
 - База суммы одна: `calculateOrderTotal()` (работы × coeff + agreed доп. + материалы при `matsInTotal`).
 - Функции: `orderRevenue/orderPaid/orderBalance`, `addPayment/removePayment`,
   `orderRewardPct/orderReward`, `takeOrder/assignHelper/confirmHelper`,
   `createFollowUpOrder/orderDisplayNumber`, `normalizeClientName/findSimilarClients/buildClientDossier`,
   `addTag/removeTag/allOrderTags`, `saveTemplate/applyTemplate`,
-  `findSimilarPriceItems/wordLooksSimilar/levenshtein`.
+  `findSimilarPriceItems/wordLooksSimilar/levenshtein`,
+  `saveSupplier/deleteSupplier/findSupplier`,
+  `materialGroupKey/materialGroupLabel/groupMaterialsBySupplier`,
+  `buildPurchaseRoute/navigatorUrl`, `MAT_PLACES`, `MAT_PLACE_LABELS`.
 
 ### Осталось пустовать
-- `DB.suppliers` — нет в модели, нужен Этап 18.
-
----
-
-## Этап 18 — Материалы: поставщики, локация, маршрут
-
-- `DB.suppliers[{ id, name, phone, address, hours, assortment[], note }]` + экран ведения (вкладка в админке).
-- У материала: `m.place = 'trunk'|'supplier'|'warehouse'|'client'` (багажник / поставщик / склад / у заказчика), `m.supplierId`.
-- Вкладка «Материалы» (`ui-shopping.js`) — выбор локации; глобальные закупки — группировка по поставщику + шаринг списка.
-- «Маршрут» на карточке: чекбоксы точек (поставщик/склад) + «игнорировать точку» + выбор навигатора (ссылки 2ГИС / Яндекс / Google, обычные URL, без библиотек).
-
-**Смоук:** `_suppliers_smoke.js`.
+- Пустых коллекций в модели нет: `DB.suppliers` ведётся в админке (Этап 18).
 
 ---
 
@@ -102,5 +98,5 @@
 
 ## Порядок работ
 
-18 → 19 → 20 (21 — по отдельному решению).
+19 → 20 (21 — по отдельному решению).
 Каждый этап — отдельный коммит; перед коммитом полный прогон проверок.

@@ -212,9 +212,48 @@ function renderOrderTabMain(o) {
       '<div class="muted">' + escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '</div>' +
     '</div>' +
     renderOrderTagsBlock(o, editable) +
+    renderOrderRouteBlock(o, editable) +
     renderOrderTeamBlock(o, editable) +
     statusBlock +
     renderFollowUpBlock(o, editable);
+}
+
+// Блок «Маршрут закупки» (Этап 18): точки (поставщики/склад) с «игнорировать»
+// и кнопки навигаторов — обычные веб-URL, без библиотек карт.
+function renderOrderRouteBlock(o, editable) {
+  const points = buildPurchaseRoute(o, o.routeIgnored);
+  if (!points.length) return '';
+
+  const navBtns = function (addr) {
+    if (!addr) return '';
+    // Обычные веб-ссылки карт: target="_blank" открывает навигатор без JS.
+    return '<span class="row" style="gap:4px">' +
+      '<a class="btn" href="' + navigatorUrl('2gis', addr) +
+        '" target="_blank" rel="noopener">2ГИС</a>' +
+      '<a class="btn" href="' + navigatorUrl('yandex', addr) +
+        '" target="_blank" rel="noopener">Яндекс</a>' +
+      '<a class="btn" href="' + navigatorUrl('google', addr) +
+        '" target="_blank" rel="noopener">Google</a>' +
+      '</span>';
+  };
+
+  const rows = points.map(function (p) {
+    const cb = editable
+      ? '<label class="small"><input type="checkbox" data-route-ignore="' + escapeHtml(p.key) + '"' +
+          (p.ignored ? ' checked' : '') + '> игнорировать</label>'
+      : (p.ignored ? '<span class="small muted">игнорируется</span>' : '');
+    return '<div class="est-row"><span><b>' + escapeHtml(p.title) + '</b>' +
+        (p.address ? '<div class="small muted">' + escapeHtml(p.address) + '</div>' : '') +
+        (p.phone ? '<div class="small">' + escapeHtml(p.phone) + '</div>' : '') +
+        '</span>' +
+      '<span class="row" style="gap:6px">' + navBtns(p.address) + cb + '</span>' +
+    '</div>';
+  }).join('');
+
+  return '<div class="card info-block">' +
+      '<h4>📍 Маршрут закупки</h4>' + rows +
+      '<p class="small muted">Навигатор откроется в новой вкладке по адресу точки.</p>' +
+    '</div>';
 }
 
 // Блок тегов проблемы (Этап 17): чипы с крестиком + пресет + произвольный тег.
@@ -669,6 +708,20 @@ document.addEventListener('change', function (ev) {
     if (!o || !tag) return;
     if (!canEditOrder(o)) { toast('Нельзя редактировать заявку', true); return; }
     if (!addTag(o, tag)) { toast('Такой тег уже есть', true); return; }
+    render();
+    return;
+  }
+
+  // «Игнорировать точку» маршрута закупки (Этап 18).
+  const routeIg = ev.target.closest && ev.target.closest('[data-route-ignore]');
+  if (routeIg) {
+    const o = findOrderById(state.orderId);
+    if (!o || !canEditOrder(o)) return;
+    const key = routeIg.getAttribute('data-route-ignore');
+    if (!o.routeIgnored || typeof o.routeIgnored !== 'object') o.routeIgnored = {};
+    if (routeIg.checked) o.routeIgnored[key] = true;
+    else delete o.routeIgnored[key];
+    saveOrderLocal(o);
     render();
     return;
   }

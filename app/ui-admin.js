@@ -29,6 +29,7 @@ function arow(cells, head, cols) {
 
 const COLS_EMP = '1.2fr 1.3fr 1fr .9fr .5fr';
 const COLS_PRICE = '1.6fr 1fr .8fr .6fr 1fr';
+const COLS_SUPP = '1.4fr 1fr 1.3fr .9fr .8fr';
 
 // --- 2. Сотрудники ---
 
@@ -173,10 +174,71 @@ function renderPriceModal(item) {
   );
 }
 
+// --- 5. Поставщики (Этап 18) ---
+
+function renderAdminSuppliers() {
+  const sups = DB.suppliers || [];
+  const rows = sups.map(function (s) {
+    return arow([
+      escapeHtml(s.name || '—'),
+      '<span class="small">' + escapeHtml(s.phone || '—') + '</span>',
+      '<span class="small">' + escapeHtml(s.address || '—') + '</span>',
+      '<span class="small">' + escapeHtml(s.hours || '—') + '</span>',
+      '<span class="row">' +
+        '<button class="btn" data-edit-supplier="' + s.id + '" title="Редактировать">✎</button>' +
+        '<button class="btn btn-danger" data-delete-supplier="' + s.id + '" title="Удалить">🗑</button>' +
+      '</span>'
+    ], false, COLS_SUPP);
+  }).join('') || '<p class="muted">Поставщиков нет.</p>';
+
+  return '<div class="card">' +
+      '<div class="spread"><h4>Поставщики</h4>' +
+        '<button class="btn btn-primary" data-add-supplier>➕ Добавить поставщика</button>' +
+      '</div>' +
+      arow(['Название', 'Телефон', 'Адрес', 'Часы работы', 'Действия'], true, COLS_SUPP) +
+      rows +
+    '</div>' +
+    '<div class="card">' +
+      '<h4>Склад</h4>' +
+      '<label class="field"><span>Адрес склада (для маршрута закупки)</span>' +
+        '<input id="wh-address" type="text" value="' +
+        escapeHtml((DB.settings && DB.settings.warehouseAddress) || '') + '"></label>' +
+      '<button class="btn btn-block" data-save-warehouse>💾 Сохранить адрес склада</button>' +
+    '</div>';
+}
+
+// Модалка добавления/редактирования поставщика (без id — новый).
+function renderSupplierModal(supplier) {
+  const s = supplier || { id: null, name: '', phone: '', address: '', hours: '', note: '' };
+  window.__supplierEdit = { id: (supplier && supplier.id) || null };
+
+  const field = function (label, id, value, type) {
+    return '<label class="field"><span>' + label + '</span>' +
+      '<input id="' + id + '" type="' + (type || 'text') + '" value="' + escapeHtml(value || '') + '"></label>';
+  };
+
+  showModal(
+    '<h3>' + (s.id ? '✎ Поставщик' : '➕ Новый поставщик') + '</h3>' +
+    field('Название *', 'sp-name', s.name) +
+    field('Телефон', 'sp-phone', s.phone, 'tel') +
+    field('Адрес', 'sp-address', s.address) +
+    field('Часы работы', 'sp-hours', s.hours) +
+    '<label class="field"><span>Примечание (ассортимент)</span>' +
+      '<textarea id="sp-note" rows="2">' + escapeHtml(s.note || '') + '</textarea></label>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-save-supplier style="flex:1">Сохранить</button>' +
+    '</div>'
+  );
+}
+
 // --- 1. Главный экран админки ---
 
 function renderAdmin() {
-  const tabs = [['employees', '👥 Сотрудники'], ['requisites', '🏢 Реквизиты'], ['price', '📋 Прайс']];
+  const tabs = [
+    ['employees', '👥 Сотрудники'], ['requisites', '🏢 Реквизиты'],
+    ['price', '📋 Прайс'], ['suppliers', '🚚 Поставщики']
+  ];
   const tabHtml = tabs.map(function (t) {
     return '<button class="tab-btn' + (ADMIN_TAB === t[0] ? ' active' : '') +
       '" data-admin-tab="' + t[0] + '">' + t[1] + '</button>';
@@ -185,6 +247,7 @@ function renderAdmin() {
   let body;
   if (ADMIN_TAB === 'requisites') body = renderAdminRequisites();
   else if (ADMIN_TAB === 'price') body = renderAdminPrice();
+  else if (ADMIN_TAB === 'suppliers') body = renderAdminSuppliers();
   else body = renderAdminEmployees();
 
   return '<h2>⚙️ Администрирование</h2>' +
@@ -343,6 +406,59 @@ document.addEventListener('click', function (ev) {
     closeModal();
     toast('Прайс сохранён');
     render();
+    return;
+  }
+
+  // --- Поставщики (Этап 18) ---
+
+  const addSupp = sel('[data-add-supplier]');
+  if (addSupp) { renderSupplierModal(null); return; }
+
+  const editSupp = sel('[data-edit-supplier]');
+  if (editSupp) {
+    const s = findSupplier(editSupp.getAttribute('data-edit-supplier'));
+    if (s) renderSupplierModal(s);
+    return;
+  }
+
+  const delSupp = sel('[data-delete-supplier]');
+  if (delSupp) {
+    if (confirm('Удалить поставщика?')) {
+      if (deleteSupplier(delSupp.getAttribute('data-delete-supplier'))) {
+        toast('Поставщик удалён');
+        render();
+      }
+    }
+    return;
+  }
+
+  const saveSupp = sel('[data-save-supplier]');
+  if (saveSupp) {
+    const name = valOf('sp-name');
+    if (!name) { toast('Укажите название', true); return; }
+    const data = {
+      id: window.__supplierEdit ? window.__supplierEdit.id : null,
+      name: name,
+      phone: valOf('sp-phone'),
+      address: valOf('sp-address'),
+      hours: valOf('sp-hours'),
+      note: valOf('sp-note')
+    };
+    const saved = saveSupplier(data);
+    if (!saved) { toast('Не удалось сохранить', true); return; }
+    window.__supplierEdit = null;
+    closeModal();
+    toast('Поставщик сохранён');
+    render();
+    return;
+  }
+
+  const saveWh = sel('[data-save-warehouse]');
+  if (saveWh) {
+    if (!DB.settings) DB.settings = {};
+    DB.settings.warehouseAddress = valOf('wh-address');
+    save();
+    toast('Адрес склада сохранён');
     return;
   }
 });

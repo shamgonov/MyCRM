@@ -77,6 +77,18 @@ function renderMaterialModal(o, matIndex) {
       return '<option value="' + s[0] + '"' + (m.status === s[0] ? ' selected' : '') + '>' + s[1] + '</option>';
     }).join('');
 
+  // Локация и поставщик (Этап 18).
+  const place = MAT_PLACES.indexOf(m.place) >= 0 ? m.place : 'supplier';
+  const placeOpts = MAT_PLACES.map(function (p) {
+    return '<option value="' + p + '"' + (place === p ? ' selected' : '') + '>' +
+      MAT_PLACE_LABELS[p] + '</option>';
+  }).join('');
+  const supOpts = (DB.suppliers || []).map(function (s) {
+    return '<option value="' + escapeHtml(s.id) + '"' +
+      (String(m.supplierId || '') === String(s.id) ? ' selected' : '') + '>' +
+      escapeHtml(s.name) + '</option>';
+  }).join('');
+
   window.__matEdit = { orderId: o.id, idx: (matIndex === null || matIndex === undefined) ? null : matIndex };
 
   showModal(
@@ -96,6 +108,12 @@ function renderMaterialModal(o, matIndex) {
         '<select id="mt-buyer">' + buyerOpts + '</select></label>' +
       '<label class="field" style="flex:1"><span>Статус</span>' +
         '<select id="mt-status">' + statusOpts + '</select></label>' +
+    '</div>' +
+    '<div class="row">' +
+      '<label class="field" style="flex:1"><span>Место</span>' +
+        '<select id="mt-place">' + placeOpts + '</select></label>' +
+      '<label class="field" style="flex:1"><span>Поставщик</span>' +
+        '<select id="mt-supplier"><option value="">— не выбран —</option>' + supOpts + '</select></label>' +
     '</div>' +
     '<div id="mt-bought-fields"' + (m.status === 'bought' ? '' : ' hidden') + '>' +
       '<label class="field"><span>Факт. цена</span>' +
@@ -128,7 +146,9 @@ function saveMaterialFromModal(orderId, idx, v) {
     unit: v.unit || 'шт',
     price: Number(v.price) || 0,
     buyer: v.buyer || 'company',
-    status: v.status || 'needed'
+    status: v.status || 'needed',
+    place: v.place || 'supplier',
+    supplierId: v.supplierId || null
   };
   if (mat.status === 'bought') {
     mat.factPrice = Number(v.factPrice) || 0;
@@ -194,6 +214,7 @@ function renderGlobalShopping() {
       ? '<button class="btn btn-primary" data-compensate="' + it.o.id + '|' + it.idx +
         '" style="padding:2px 8px;font-size:12px">💰 Компенсировать</button>'
       : '';
+    const placeLabel = MAT_PLACE_LABELS[it.m.place] || it.m.place;
     return '<div class="list-item">' +
       '<div class="spread">' +
         '<span data-order="' + it.o.id + '"><b>🧱 ' + escapeHtml(it.m.name) + '</b>' +
@@ -204,16 +225,43 @@ function renderGlobalShopping() {
         '<span class="small muted">' + (it.m.qty || 0) + ' ' + escapeHtml(it.m.unit || 'шт') +
           ' · ' + money((Number(it.m.factPrice) || Number(it.m.price) || 0) * (Number(it.m.qty) || 0)) +
           (it.m.hasReceipt ? ' · 📷 чек' : '') +
-          (it.m.note ? ' · ' + escapeHtml(it.m.note) : '') + '</span>' +
+          (it.m.note ? ' · ' + escapeHtml(it.m.note) : '') +
+          ' · ' + escapeHtml(placeLabel) +
+          '</span>' +
         compBtn +
       '</div>' +
     '</div>';
   }).join('') || '<p class="muted">Ничего не найдено по этому фильтру.</p>';
 
+  // Группировка по поставщикам/локациям (Этап 18).
+  const groups = groupMaterialsBySupplier(items);
+  const groupRows = groups.map(function (g) {
+    const itemsHtml = g.items.map(function (it) {
+      return '<div class="list-item" style="margin:4px 0 0">' +
+        '<div class="spread">' +
+          '<span data-order="' + it.o.id + '"><b>🧱 ' + escapeHtml(it.m.name) + '</b>' +
+            ' <span class="small muted">№' + it.o.id + ' · ' + escapeHtml(it.o.client) + '</span></span>' +
+          '<span>' + materialStatusBadge(it.m) + '</span>' +
+        '</div>' +
+        '<div class="small muted">' + (it.m.qty || 0) + ' ' + escapeHtml(it.m.unit || 'шт') +
+          ' · ' + money((Number(it.m.factPrice) || Number(it.m.price) || 0) * (Number(it.m.qty) || 0)) +
+          '</div>' +
+        '</div>';
+    }).join('');
+    return '<div class="card" style="margin:8px 0">' +
+      '<h4>' + escapeHtml(g.label) + '</h4>' + itemsHtml + '</div>';
+  }).join('');
+
+  // Кнопка шаринга списка закупок (Этап 18).
+  const shareBtn = '<button class="btn btn-block" data-share-shop-list style="margin-top:10px">' +
+    '📤 Поделиться списком закупок</button>';
+
   return '<h2>🛒 Закупки</h2>' +
     '<div class="chips">' + chips + '</div>' +
     '<p class="small muted">К выплате работникам: <b>' + money(owed) + '</b></p>' +
-    '<div class="list">' + rows + '</div>';
+    '<div class="list">' + rows + '</div>' +
+    (groups.length ? '<h3 style="margin:16px 0 8px">Группировка по поставщикам</h3>' + groupRows : '') +
+    shareBtn;
 }
 
 // --- Делегирование событий закупок ---
@@ -286,6 +334,8 @@ document.addEventListener('click', function (ev) {
       price: val('mt-price'),
       buyer: val('mt-buyer'),
       status: status,
+      place: val('mt-place'),
+      supplierId: val('mt-supplier') || null,
       factPrice: val('mt-fact'),
       note: status === 'spoiled' ? val('mt-note-s') : val('mt-note-b'),
       hasReceipt: chk('mt-receipt')
@@ -297,6 +347,27 @@ document.addEventListener('click', function (ev) {
       closeModal();
       ORD_TAB = 'materials';
       render();
+    }
+    return;
+  }
+
+  // Шаринг списка закупок (Этап 18).
+  const shareBtn = sel('[data-share-shop-list]');
+  if (shareBtn) {
+    const lines = ['Закупки CRM2'];
+    const f = shopFilter();
+    const items = collectMaterials(f);
+    items.forEach(function (it) {
+      lines.push(
+        it.m.name + ' · ' + it.m.qty + ' ' + it.m.unit +
+        ' · ' + money((Number(it.m.factPrice) || Number(it.m.price) || 0) * (Number(it.m.qty) || 0)) +
+        ' · ' + MAT_PLACE_LABELS[it.m.place]
+      );
+    });
+    if (typeof shareDocument === 'function') {
+      shareDocument(lines.join('\n'));
+    } else {
+      toast('Список: ' + items.length + ' позиций', true);
     }
     return;
   }
