@@ -1,7 +1,7 @@
-# CRM2 — сводный план остатка (Этапы 20–21)
+# CRM2 — сводный план остатка (Этап 21)
 
 Документ-ориентир. Актуален вместо `SPEC.md` (тот — застывший мастер-промпт, расходится с кодом).
-Готовое: Этапы 0–19, 16 модулей `app/`, `SMOKE: pass=1108 fail=0`, `GATE OK`.
+Готовое: Этапы 0–20, 19 модулей `app/`, `SMOKE: pass=1303 fail=0`, `GATE OK`.
 
 ## Решённые вопросы Q1–Q6 (приняты, реализованы)
 
@@ -25,7 +25,8 @@
 | 16 | Контрагенты: справочник, дедуп, история, досье, выбор в заявке, реквизиты в документах | 8283572 |
 | 17 | Теги проблем (чипы + фильтр), шаблоны смет (сохранить/применить), дедуп услуг в прайсе | 948c037 |
 | 18 | Поставщики (CRUD в админке), локация материалов (place/supplierId), группировка, маршрут + навигатор, шаринг списка закупок | 8b2d5a0 |
-| 19 | «⚠️ Требует внимания» (`app/ui-attention.js`), «Итог звонка» (6 веток, `o.callbackAt`), дайджест 08:30, new→postponed | (этот коммит) |
+| 19 | «⚠️ Требует внимания» (`app/ui-attention.js`), «Итог звонка» (6 веток, `o.callbackAt`), дайджест 08:30, new→postponed | 9e0db09 |
+| 20 | Органайзер (`app/ui-tasks.js`), калькулятор без eval (`app/ui-calc.js`), профиль (`app/ui-profile.js`): PIN, график, уведомления, выход | (этот коммит) |
 
 ---
 
@@ -44,7 +45,7 @@
 - Проверка: `node tools/check-modules.js && node tools/smoke/run.js && node --check app/<новый>.js`.
 - Если якорь для правки не найден — СТОП, спросить, не выдумывать.
 
-### Текущая модель данных (итог Этапов 12–19)
+### Текущая модель данных (итог Этапов 12–20)
 - `o.payments[]` — `{ id, sum, date, method:'cash'|'card'|'transfer', by, note }`.
 - `o.confirm = { имя: 'pending'|'ok'|'no' }`, `o.takenAt`, `o.takenBy`.
 - `o.moneyReminderAt`, `o.rewardPct` (переопределяет `DB.settings.rewardPctDefault`).
@@ -56,8 +57,11 @@
 - `DB.templates[{ id, name, kind:'estimate', works:[{ name, qty, unit, price, coeff }], tags[] }]` (Этап 17).
 - `DB.suppliers[{ id, name, phone, address, hours, note }]` (Этап 18).
 - `DB.clients[{ id, kind:'person'|'ip'|'company', name, inn, kpp, ogrn, phone, email, city, address, notes, orderIds[], createdAt, createdBy }]`.
+- `DB.tasks[{ id, title, note, orderId|null, done, createdAt, dueDate|null, by }]` — органайзер (Этап 20).
 - `DB.settings.warehouseAddress` — адрес склада для маршрута закупки (Этап 18).
-- `DB.settings.digestShownToday` — дата показанного утреннего дайджеста (Этап 19).
+- `DB.settings.digestShownToday` — дата (YYYY-MM-DD) показанного утреннего дайджеста (Этап 19).
+- `DB.settings.schedule = { Mon..Sun: { from:'HH:MM', to:'HH:MM', off:bool } }` — график работы (Этап 20).
+- `DB.settings.notifyEnabled` — пользователь согласился на системные уведомления.
 - База суммы одна: `calculateOrderTotal()` (работы × coeff + agreed доп. + материалы при `matsInTotal`).
 - Функции: `orderRevenue/orderPaid/orderBalance`, `addPayment/removePayment`,
   `orderRewardPct/orderReward`, `takeOrder/assignHelper/confirmHelper`,
@@ -69,20 +73,16 @@
   `buildPurchaseRoute/navigatorUrl`, `MAT_PLACES`, `MAT_PLACE_LABELS`,
   `renderAttention/attentionGroups/isCallbackDue`,
   `renderCallResultModal/applyCallResult/CALL_BRANCHES`,
-  `buildDigestText/maybeDigest` (notify.js).
+  `buildDigestText/maybeDigest` (notify.js),
+  `normalizeTask/addTask/updateTask/toggleTask/deleteTask/findTask`,
+  `tasksForOrder/tasksByFilter/renderTasks/renderTaskModal/renderOrderTasksBlock` (ui-tasks.js),
+  `evaluateExpression/calcTokenize/calcParse/calcFormat/openCalcModal/renderCalcButton` (ui-calc.js),
+  `renderProfile/renderPinModal/renderScheduleModal/schedule/defaultSchedule/saveSchedule`,
+  `currentUserRecord/pinStatusText/notifyStatusText` (ui-profile.js).
 
 ### Осталось пустовать
-- Пустых коллекций в модели нет: `DB.suppliers` ведётся в админке (Этап 18).
-
----
-
-## Этап 20 — Органайзер, калькулятор, профиль
-
-- `S.tasks` (`core.js`) → органайзер: личные задачи/заметки, чек-лист, привязка к заявке, дата.
-- Калькулятор — модалка без `eval` (свой разбор выражения), кнопка в шапке/карточке.
-- `app/ui-profile.js`: данные, PIN (`auth.js`), график работы, уведомления (`notify.js`), выход.
-
-**Смоук:** `_profile_smoke.js`.
+- Пустых коллекций в модели нет: `DB.suppliers` ведётся в админке (Этап 18),
+  `DB.tasks` — в органайзере (Этап 20).
 
 ---
 
@@ -94,5 +94,5 @@
 
 ## Порядок работ
 
-20 (21 — по отдельному решению).
+Остался Этап 21 — только по отдельному решению пользователя.
 Каждый этап — отдельный коммит; перед коммитом полный прогон проверок.

@@ -162,6 +162,8 @@ function renderOrderCard(id) {
   return '<div class="head-row">' +
       '<button class="btn" data-back>←</button>' +
       '<h2>Заявка №' + o.id + '</h2>' +
+      // 🔢 Калькулятор (Этап 20): ui-calc.js может не загрузиться — ленивый вызов.
+      (typeof renderCalcButton === 'function' ? renderCalcButton() : '') +
       (canEditOrder(o) ? '<button class="btn" data-edit-order="' + o.id + '" title="Редактировать">✎</button>' : '') +
     '</div>' +
     '<div class="tabs">' + tabs + '</div>' +
@@ -220,6 +222,8 @@ function renderOrderTabMain(o) {
     renderOrderTagsBlock(o, editable) +
     renderOrderRouteBlock(o, editable) +
     renderOrderTeamBlock(o, editable) +
+    // Задачи заявки (Этап 20): ui-tasks.js может не загрузиться — ленивый вызов.
+    (typeof renderOrderTasksBlock === 'function' ? renderOrderTasksBlock(o) : '') +
     statusBlock +
     renderFollowUpBlock(o, editable);
 }
@@ -362,6 +366,10 @@ function renderOrderTeamBlock(o, editable) {
       actions +
     '</div>';
 }
+
+// --- 4.5. Задачи заявки (Этап 20) — вызов ui-tasks.js, ленивый (typeof) ---
+
+// renderOrderTasksBlock подключён из ui-tasks.js
 
 // Заявка по id (общий поиск для обработчиков карточки).
 function findOrderById(id) {

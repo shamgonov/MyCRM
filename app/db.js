@@ -86,7 +86,17 @@ function defaultData() {
       tagPresets: ['Стекло', 'Фурнитура', 'Замер', 'Гарантия', 'Срочно'], // теги проблем (Этап 17)
       warehouseAddress: '', // адрес склада для маршрута закупки (Этап 18)
       digestShownToday: '', // дата (YYYY-MM-DD) показанного утреннего дайджеста (Этап 19)
-      notifyEnabled: false // пользователь согласился на системные уведомления
+      notifyEnabled: false, // пользователь согласился на системные уведомления
+      // График работы на неделю (Этап 20): ключи Mon..Sun — ISO-английский.
+      schedule: {
+        Mon: { from: '09:00', to: '18:00', off: false },
+        Tue: { from: '09:00', to: '18:00', off: false },
+        Wed: { from: '09:00', to: '18:00', off: false },
+        Thu: { from: '09:00', to: '18:00', off: false },
+        Fri: { from: '09:00', to: '18:00', off: false },
+        Sat: { from: '10:00', to: '15:00', off: false },
+        Sun: { from: '09:00', to: '18:00', off: true }
+      }
     },
     regions: [{
       region: 'Свердловская область',
@@ -206,6 +216,8 @@ function load() {
   if (!Array.isArray(DB.templates)) DB.templates = [];
   // Поставщики (Этап 18): в старых базах коллекции нет.
   if (!Array.isArray(DB.suppliers)) DB.suppliers = [];
+  // Задачи органайзера (Этап 20): в старых базах коллекции нет.
+  if (!Array.isArray(DB.tasks)) DB.tasks = [];
   // Реквизиты и счётчик документов появились на Этапе 8.
   const defSettings = defaultData().settings;
   if (!DB.settings || typeof DB.settings !== 'object') DB.settings = defSettings;

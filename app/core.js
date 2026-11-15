@@ -46,7 +46,7 @@ const NAVS_BASE = {
     ['shopping', '🛒', 'Закупки']
   ],
   worker: [
-    ['tasks', '🔍', 'Поиск заказов'],
+    ['tasks', '📝', 'Органайзер'],
     ['shopping', '🛒', 'Закупки'],
     ['calendar', '📅', 'Календарь']
   ]
@@ -197,13 +197,19 @@ const S = {
     return '<h2>⚙️ Администрирование</h2>' +
       '<p class="muted">Модуль UI ещё не загружен.</p>';
   },
-  tasks: function () { return '<h2>Поиск заказов</h2>'; },
+  // Органайзер задач (Этап 20) живёт в ui-tasks.js — ленивая обёртка.
+  // Пункт меню worker называется «Поиск заказов», но экран — общий органайзер.
+  tasks: function () {
+    if (typeof renderTasks === 'function') return renderTasks();
+    return '<h2>📝 Органайзер</h2><p class="muted">Модуль UI ещё не загружен.</p>';
+  },
   create: function () { return '<h2>Новая заявка</h2>'; },
+  // Профиль (Этап 20) живёт в ui-profile.js; «🚪 Выйти» (data-logout) обрабатывает core.js.
   profile: function () {
+    if (typeof renderProfile === 'function') return renderProfile();
     return '<h2>👤 Профиль</h2>' +
       '<div class="card">' +
-        '<p class="muted">Экран в разработке (Этап 12).</p>' +
-        '<p class="small">Здесь будут настройки пользователя, PIN-код, график работы.</p>' +
+        '<p class="muted">Модуль UI ещё не загружен.</p>' +
         '<button class="btn btn-primary" data-logout style="margin-top:12px">🚪 Выйти</button>' +
       '</div>';
   }
