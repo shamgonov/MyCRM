@@ -82,6 +82,7 @@ function defaultData() {
       docCounter: 0, // счётчик документов для нумерации
       remindBeforeH: 2, // за сколько часов до визита напоминать (Этап 9)
       rewardPctDefault: 0, // доля исполнителя по умолчанию, % (Этап 13; 0 = выключено)
+      tagPresets: ['Стекло', 'Фурнитура', 'Замер', 'Гарантия', 'Срочно'], // теги проблем (Этап 17)
       notifyEnabled: false // пользователь согласился на системные уведомления
     },
     regions: [{
@@ -197,6 +198,8 @@ function load() {
   DB = data || defaultData();
   // Мягкая миграция старых локальных баз: прайс появился на Этапе 6.
   if (!Array.isArray(DB.priceList)) DB.priceList = defaultData().priceList;
+  // Шаблоны смет (Этап 17): в старых базах коллекции нет.
+  if (!Array.isArray(DB.templates)) DB.templates = [];
   // Реквизиты и счётчик документов появились на Этапе 8.
   const defSettings = defaultData().settings;
   if (!DB.settings || typeof DB.settings !== 'object') DB.settings = defSettings;

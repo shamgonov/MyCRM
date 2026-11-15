@@ -33,6 +33,8 @@ function normalizeOrder(o) {
   if (!Array.isArray(o.payments)) o.payments = [];
   // Подтверждение соисполнителя (Этап 14)
   if (!o.confirm || typeof o.confirm !== 'object' || Array.isArray(o.confirm)) o.confirm = {};
+  // Теги проблемы (Этап 17)
+  if (!Array.isArray(o.tags)) o.tags = [];
   return o;
 }
 
@@ -317,4 +319,81 @@ function createFollowUpOrder(parent, data) {
   });
   saveOrderLocal(child);
   return child;
+}
+
+// --- Теги (Этап 17) ---
+
+// Добавить тег заявке.
+function addTag(o, tag) {
+  if (!o || !tag) return false;
+  normalizeOrder(o);
+  tag = tag.trim();
+  if (!tag) return false;
+  if (o.tags.indexOf(tag) >= 0) return false;
+  o.tags.push(tag);
+  saveOrderLocal(o);
+  return true;
+}
+
+// Удалить тег у заявки.
+function removeTag(o, tag) {
+  if (!o || !tag) return false;
+  const idx = o.tags.indexOf(tag);
+  if (idx < 0) return false;
+  o.tags.splice(idx, 1);
+  saveOrderLocal(o);
+  return true;
+}
+
+// --- Шаблоны смет (Этап 17) ---
+
+// Сохранить текущую смету заявки как шаблон.
+function saveTemplate(o, name) {
+  if (!o || !name) return null;
+  name = name.trim();
+  if (!name) return null;
+  if (!Array.isArray(DB.templates)) DB.templates = [];
+  const tpl = {
+    id: Date.now(),
+    name: name,
+    kind: 'estimate',
+    works: (o.works || []).map(function (w) {
+      return {
+        name: w.name || w.title || '',
+        qty: w.qty || 1,
+        unit: w.unit || 'шт',
+        price: w.price || 0,
+        coeff: w.coeff || 1
+      };
+    }),
+    tags: (o.tags || []).slice()
+  };
+  DB.templates.push(tpl);
+  save();
+  return tpl;
+}
+
+// Применить шаблон к заявке: очищает прежние работы и теги, заполняет из шаблона.
+function applyTemplate(o, templateId) {
+  if (!o || templateId === null || templateId === undefined) return false;
+  if (!Array.isArray(DB.templates)) return false;
+  const tpl = DB.templates.find(function (t) { return t.id === templateId; });
+  if (!tpl) return false;
+  o.works = (tpl.works || []).map(function (tw) {
+    // Название из шаблона кладём и в name, и в title: сид и документы читают
+    // title, смета и новые позиции — name (везде w.name || w.title).
+    return {
+      name: tw.name,
+      title: tw.name,
+      qty: tw.qty,
+      unit: tw.unit || 'шт',
+      price: tw.price,
+      coeff: tw.coeff || 1,
+      done: false,
+      skipped: false
+    };
+  });
+  o.tags = (tpl.tags || []).slice();
+  saveOrderLocal(o);
+  return true;
 }

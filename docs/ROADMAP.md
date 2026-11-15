@@ -1,7 +1,7 @@
-# CRM2 — сводный план остатка (Этапы 17–21)
+# CRM2 — сводный план остатка (Этапы 18–21)
 
 Документ-ориентир. Актуален вместо `SPEC.md` (тот — застывший мастер-промпт, расходится с кодом).
-Готовое: Этапы 0–16, 15 модулей `app/`, `SMOKE: pass=846 fail=0`, `GATE OK`.
+Готовое: Этапы 0–17, 15 модулей `app/`, `SMOKE: pass=917 fail=0`, `GATE OK`.
 
 ## Решённые вопросы Q1–Q6 (приняты, реализованы)
 
@@ -22,7 +22,8 @@
 | 12–13 | Вкладка «Деньги», платежи, остаток + напоминалка, reward, единая база суммы | d18709e |
 | 14 | Пул, «✋ Взять в работу», подтверждение соисполнителя (o.confirm), inwork→postponed | 49ee54e |
 | 15 | «🔄 Перенести остаток», дочерняя заявка №279/1, промежуточный акт | 089909a |
-| 16 | Контрагенты: справочник, дедуп, история, досье, выбор в заявке, реквизиты в документах | (этот коммит) |
+| 16 | Контрагенты: справочник, дедуп, история, досье, выбор в заявке, реквизиты в документах | 8283572 |
+| 17 | Теги проблем (чипы + фильтр), шаблоны смет (сохранить/применить), дедуп услуг в прайсе | (этот коммит) |
 
 ---
 
@@ -41,32 +42,24 @@
 - Проверка: `node tools/check-modules.js && node tools/smoke/run.js && node --check app/<новый>.js`.
 - Если якорь для правки не найден — СТОП, спросить, не выдумывать.
 
-### Текущая модель данных (итог Этапов 12–16)
+### Текущая модель данных (итог Этапов 12–17)
 - `o.payments[]` — `{ id, sum, date, method:'cash'|'card'|'transfer', by, note }`.
 - `o.confirm = { имя: 'pending'|'ok'|'no' }`, `o.takenAt`, `o.takenBy`.
 - `o.moneyReminderAt`, `o.rewardPct` (переопределяет `DB.settings.rewardPctDefault`).
 - `o.parentId`, `o.childNo`, `o.followUpIds[]` — связи переноса остатка.
 - `o.clientId`, `o.clientLegal` — привязка к контрагенту (Этап 16).
+- `o.tags[]` — теги проблемы; пресеты в `DB.settings.tagPresets` (Этап 17).
+- `DB.templates[{ id, name, kind:'estimate', works:[{ name, qty, unit, price, coeff }], tags[] }]` (Этап 17).
 - `DB.clients[{ id, kind:'person'|'ip'|'company', name, inn, kpp, ogrn, phone, email, city, address, notes, orderIds[], createdAt, createdBy }]`.
 - База суммы одна: `calculateOrderTotal()` (работы × coeff + agreed доп. + материалы при `matsInTotal`).
 - Функции: `orderRevenue/orderPaid/orderBalance`, `addPayment/removePayment`,
   `orderRewardPct/orderReward`, `takeOrder/assignHelper/confirmHelper`,
-  `createFollowUpOrder/orderDisplayNumber`, `normalizeClientName/findSimilarClients/buildClientDossier`.
+  `createFollowUpOrder/orderDisplayNumber`, `normalizeClientName/findSimilarClients/buildClientDossier`,
+  `addTag/removeTag/allOrderTags`, `saveTemplate/applyTemplate`,
+  `findSimilarPriceItems/wordLooksSimilar/levenshtein`.
 
 ### Осталось пустовать
-- `DB.templates` — пустой, нужен Этап 17.
 - `DB.suppliers` — нет в модели, нужен Этап 18.
-
----
-
-## Этап 17 — Сметы: теги проблем, шаблоны, дедуп услуг
-
-- **Теги:** `o.tags[]` + кастомные (чипы + ввод), пресеты в `DB.settings.tagPresets`; фильтр по тегу в списке заявок.
-- **Шаблоны:** `DB.templates` = `{ id, kind:'estimate'|'stages', name, works:[{ name, qty, unit, price, coeff }], tags }`; кнопки «Сохранить как шаблон» / «Применить шаблон» в `app/ui-estimate.js`.
-- **Дедуп услуг:** при добавлении позиции — live-поиск похожих названий в `DB.priceList` → «Возможно, вы имели в виду …? Точно создать новую?».
-- **Коэффициент:** ничего менять не нужно — единая база `calculateOrderTotal()` сделана на Этапе 13 (Q3).
-
-**Смоук:** `_templates_smoke.js`.
 
 ---
 
@@ -109,5 +102,5 @@
 
 ## Порядок работ
 
-17 → 18 → 19 → 20 (21 — по отдельному решению).
+18 → 19 → 20 (21 — по отдельному решению).
 Каждый этап — отдельный коммит; перед коммитом полный прогон проверок.

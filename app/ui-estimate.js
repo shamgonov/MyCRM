@@ -69,7 +69,46 @@ function renderEstimateTab(o) {
       '<button class="btn" data-action="price-list" style="flex:1">📋 Работа из прайса</button>' +
       '<button class="btn" data-action="add-extra" style="flex:1">➕ Доп. работа</button>' +
       '<button class="btn btn-primary" data-action="save-order" style="flex:1">💾 Сохранить</button>' +
+    '</div>' +
+    '<div class="row" style="gap:6px;margin-top:6px">' +
+      '<button class="btn" data-save-template style="flex:1">💾 Сохранить как шаблон</button>' +
+      '<button class="btn" data-apply-template style="flex:1">📂 Применить шаблон</button>' +
     '</div>';
+}
+
+// --- Шаблоны смет (Этап 17): модалки сохранения и применения ---
+
+function renderSaveTemplateModal(o) {
+  showModal(
+    '<h3>📥 Шаблон из сметы заявки №' + o.id + '</h3>' +
+    '<p class="small muted">В шаблон войдут работы (' + (o.works || []).length +
+      ' шт.) и теги (' + ((o.tags || []).length) + ' шт.).</p>' +
+    '<label class="field"><span>Название шаблона *</span>' +
+      '<input id="tpl-name" type="text" placeholder="Например: Замена уплотнителя, стандарт"></label>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-save-template-confirm style="flex:1">Сохранить</button>' +
+    '</div>'
+  );
+}
+
+function renderApplyTemplateModal(o) {
+  const tpls = DB.templates || [];
+  if (!tpls.length) { toast('Шаблонов пока нет', true); return; }
+  const options = tpls.map(function (t) {
+    return '<option value="' + t.id + '">' + escapeHtml(t.name) +
+      ' (' + (t.works || []).length + ' работ)</option>';
+  }).join('');
+  showModal(
+    '<h3>📂 Применить шаблон к заявке №' + o.id + '</h3>' +
+    '<p class="small muted">Текущие работы и теги заявки будут заменены работами и тегами шаблона.</p>' +
+    '<label class="field"><span>Шаблон</span>' +
+      '<select id="tpl-select">' + options + '</select></label>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-apply-template-confirm style="flex:1">Применить</button>' +
+    '</div>'
+  );
 }
 
 // --- 3. renderWorkConfigModal: настройка строки (количество, цена, коэффициент) ---
@@ -240,18 +279,159 @@ document.addEventListener('click', function (ev) {
     render();
     return;
   }
+
+  // Сохранение как шаблон (Этап 17)
+  const saveTmplBtn = sel('[data-save-template]');
+  if (saveTmplBtn) {
+    const o = (DB.orders || []).find(function (x) { return x.id === state.orderId; });
+    if (!o) { toast('Нет открытой заявки', true); return; }
+    renderSaveTemplateModal(o);
+    return;
+  }
+
+  // Подтверждение сохранения шаблона
+  const saveTmplConfirm = sel('[data-save-template-confirm]');
+  if (saveTmplConfirm) {
+    const o = (DB.orders || []).find(function (x) { return x.id === state.orderId; });
+    if (!o) { toast('Нет открытой заявки', true); return; }
+    const name = (document.getElementById('tpl-name') || {}).value || '';
+    if (!name.trim()) { toast('Введите название шаблона', true); return; }
+    const tpl = saveTemplate(o, name);
+    if (tpl) { toast('Шаблон «' + name + '» сохранён'); closeModal(); }
+    else { toast('Не удалось сохранить шаблон', true); }
+    return;
+  }
+
+  // Применить шаблон (Этап 17)
+  const applyTmplBtn = sel('[data-apply-template]');
+  if (applyTmplBtn) {
+    const o = (DB.orders || []).find(function (x) { return x.id === state.orderId; });
+    if (!o) { toast('Нет открытой заявки', true); return; }
+    renderApplyTemplateModal(o);
+    return;
+  }
+
+  // Подтверждение применения шаблона
+  const applyTmplConfirm = sel('[data-apply-template-confirm]');
+  if (applyTmplConfirm) {
+    const o = (DB.orders || []).find(function (x) { return x.id === state.orderId; });
+    if (!o) { toast('Нет открытой заявки', true); return; }
+    const selEl = document.getElementById('tpl-select');
+    const tplId = selEl ? Number(selEl.value) : 0;
+    if (!tplId) { toast('Выберите шаблон', true); return; }
+    if (!applyTemplate(o, tplId)) { toast('Не удалось применить шаблон', true); return; }
+    closeModal();
+    toast('Шаблон применён');
+    render();
+    return;
+  }
 });
 
-// Фильтр поиска в прайсе
+// Дедуп услуг (Этап 17): расстояние Левенштейна для коротких строк.
+function levenshtein(a, b) {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = [];
+  for (let j = 0; j <= b.length; j++) prev.push(j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) {
+      cur.push(Math.min(
+        prev[j] + 1,
+        cur[j - 1] + 1,
+        prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)
+      ));
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+}
+
+// Похожа ли строка q (без пробелов) на слово w: точное вхождение одного в
+// другое (падежные окончания, усечения) или малое расстояние Левенштейна
+// (опечатки). Ловит русскую морфологию: «замену» ≈ «замена».
+function wordLooksSimilar(q, w) {
+  if (!q || !w) return false;
+  if (w.indexOf(q) >= 0 || q.indexOf(w) >= 0) return true;
+  return levenshtein(q, w) <= Math.max(2, Math.floor(Math.min(q.length, w.length) / 3));
+}
+
+// Похожие позиции прайса (дедуп, Этап 17): каждое слово запроса похоже на
+// какое-то слово названия. Точное совпадение всего названия исключается —
+// оно и так видно в отфильтрованном списке.
+function findSimilarPriceItems(rawQuery) {
+  const norm = String(rawQuery || '').toLowerCase().replace(/\s+/g, ' ').trim();
+  const words = norm.split(' ').filter(Boolean);
+  const joined = norm.replace(/\s/g, '');
+  if (joined.length < 3 || !words.length) return [];
+  const out = [];
+  (DB.priceList || []).forEach(function (p) {
+    const name = String(p.name || '').toLowerCase();
+    if (!name) return;
+    if (name.replace(/\s/g, '') === joined) return; // точное совпадение — дедуп не нужен
+    const nameWords = name.split(/[^а-яa-z0-9]+/i).filter(Boolean);
+    const matched = words.every(function (w) {
+      return nameWords.some(function (nw) { return wordLooksSimilar(w, nw); });
+    });
+    if (matched) out.push(p);
+  });
+  return out.slice(0, 3);
+}
+
+// Фильтр поиска в прайсе + live-подсказка дедупа (Этап 17)
 document.addEventListener('input', function (ev) {
   const searchInput = ev.target.closest && ev.target.closest('#price-search');
   if (!searchInput) return;
-  const q = searchInput.value.toLowerCase();
   const container = document.getElementById('price-list-container');
   if (!container) return;
+
+  const old = container.querySelector('.dedup-hint');
+  if (old) container.removeChild(old);
+
+  const q = searchInput.value.toLowerCase();
   const items = container.querySelectorAll('[data-price-item]');
+  let visible = 0;
   items.forEach(function (el) {
     const name = el.querySelector('b').textContent.toLowerCase();
-    el.style.display = name.indexOf(q) >= 0 ? '' : 'none';
+    const show = name.indexOf(q) >= 0;
+    el.style.display = show ? '' : 'none';
+    if (show) visible++;
   });
+
+  // Подсказка: ничего не найдено по подстроке, но есть похожие названия.
+  if (visible === 0 && q.replace(/\s/g, '').length >= 3) {
+    const similar = findSimilarPriceItems(q);
+    if (similar.length) {
+      const hint = document.createElement('div');
+      hint.className = 'dedup-hint';
+      hint.style.cssText = 'padding:8px;margin:4px 0;border:1px dashed var(--accent);border-radius:8px';
+      hint.innerHTML = '<p class="small" style="margin:0 0 6px">💡 Возможно, вы имели в виду:</p>' +
+        similar.map(function (m) {
+          return '<div class="list-item" data-dedup="' + m.id + '">' +
+            '<div class="spread"><b>' + escapeHtml(m.name) + '</b>' +
+            '<span class="muted small">' + money(m.basePrice) + ' / ' + escapeHtml(m.unit || 'шт') + '</span></div>' +
+            '</div>';
+        }).join('') +
+        '<p class="small muted" style="margin:6px 0 0">Нажмите на позицию — она откроется в форме настройки.</p>';
+      container.insertBefore(hint, container.firstChild);
+    }
+  }
+});
+
+// Клик по дедуп-подсказке — подставляет данные и открывает форму настройки
+document.addEventListener('click', function (ev) {
+  const dedupChip = ev.target.closest && ev.target.closest('[data-dedup]');
+  if (dedupChip) {
+    const pid = Number(dedupChip.getAttribute('data-dedup'));
+    const item = (DB.priceList || []).find(function (p) { return p.id === pid; });
+    if (item) {
+      closeModal();
+      // Убираем подсказку из списка
+      const hint = document.querySelector('.dedup-hint');
+      if (hint) hint.remove();
+      renderWorkConfigModal({ name: item.name, price: item.basePrice, coeff: 1, qty: item.defaultQty }, true);
+    }
+    return;
+  }
 });

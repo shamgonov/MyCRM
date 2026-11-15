@@ -20,7 +20,7 @@ function statusBadgeClass(st) {
 // Открытая вкладка карточки (переживает перерисовки).
 var ORD_TAB = 'main';
 
-// --- Фильтры списка: [Все][🤝 Пул][Сегодня][👷 Мои][⚠️ Просрочка] ---
+// --- Фильтры списка: [Все][🤝 Пул][Сегодня][👷 Мои][⚠️ Просрочка] + 🏷️ тег ---
 
 function orderPassesFilter(o, f) {
   if (f === 'today') return o.date === localToday();
@@ -30,7 +30,26 @@ function orderPassesFilter(o, f) {
     return o.date < localToday() &&
       o.status !== 'completed' && o.status !== 'paid' && o.status !== 'canceled';
   }
+  if (f && f.indexOf('tag:') === 0) {
+    const tag = f.slice(4);
+    return Array.isArray(o.tags) && o.tags.indexOf(tag) >= 0;
+  }
   return true; // 'all'
+}
+
+// Все теги для фильтра: пресеты настроек + уникальные теги заявок (Этап 17).
+function allOrderTags() {
+  const seen = {};
+  const out = [];
+  const add = function (t) {
+    t = String(t || '').trim();
+    if (!t || seen[t]) return;
+    seen[t] = true;
+    out.push(t);
+  };
+  ((DB.settings && DB.settings.tagPresets) || []).forEach(add);
+  (DB.orders || []).forEach(function (o) { (o.tags || []).forEach(add); });
+  return out;
 }
 
 // --- 1. Список заявок ---
@@ -52,6 +71,15 @@ function renderOrdersList() {
       '" data-filter="' + c[0] + '">' + c[1] + '</button>';
   }).join('');
 
+  // Фильтр по тегу (Этап 17): пресеты + теги заявок; значение — 'tag:Тег'.
+  const tagVal = (f && f.indexOf('tag:') === 0) ? f.slice(4) : '';
+  const tagOptions = allOrderTags().map(function (t) {
+    return '<option value="' + escapeHtml(t) + '"' + (t === tagVal ? ' selected' : '') +
+      '>' + escapeHtml(t) + '</option>';
+  }).join('');
+  const tagFilter = '<label class="field" style="margin:6px 0 0"><span>🏷️ По тегу</span>' +
+    '<select data-tag-filter><option value="">— все теги —</option>' + tagOptions + '</select></label>';
+
   const cards = rows.length
     ? rows.map(renderOrderListItem).join('')
     : '<p class="muted">Заявок нет по этому фильтру.</p>';
@@ -66,6 +94,7 @@ function renderOrdersList() {
     '</div>' +
     bar +
     '<div class="chips">' + chips + '</div>' +
+    tagFilter +
     '<div class="list">' + cards + '</div>';
 }
 
@@ -182,9 +211,42 @@ function renderOrderTabMain(o) {
       '<div><a href="tel:' + escapeHtml(o.phone || '') + '">' + escapeHtml(o.phone || '—') + '</a></div>' +
       '<div class="muted">' + escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '</div>' +
     '</div>' +
+    renderOrderTagsBlock(o, editable) +
     renderOrderTeamBlock(o, editable) +
     statusBlock +
     renderFollowUpBlock(o, editable);
+}
+
+// Блок тегов проблемы (Этап 17): чипы с крестиком + пресет + произвольный тег.
+function renderOrderTagsBlock(o, editable) {
+  normalizeOrder(o);
+  const chips = o.tags.length
+    ? o.tags.map(function (t) {
+        return '<span class="badge">' + escapeHtml(t) +
+          (editable ? ' <b data-remove-tag="' + escapeHtml(t) + '" style="cursor:pointer">✕</b>' : '') +
+          '</span>';
+      }).join(' ')
+    : '<span class="muted small">Тегов нет</span>';
+
+  const presets = ((DB.settings && DB.settings.tagPresets) || []).map(function (t) {
+    return '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>';
+  }).join('');
+
+  const actions = editable
+    ? '<div class="row" style="margin-top:8px;gap:6px">' +
+        '<select data-add-tag-preset style="flex:1">' +
+          '<option value="">🏷️ Пресет…</option>' + presets +
+        '</select>' +
+        '<input id="tag-custom" type="text" placeholder="свой тег" style="flex:1">' +
+        '<button class="btn" data-add-tag-custom>＋</button>' +
+      '</div>'
+    : '';
+
+  return '<div class="card info-block">' +
+      '<h4>Теги</h4>' +
+      '<div class="chips">' + chips + '</div>' +
+      actions +
+    '</div>';
 }
 
 // Блок переноса остатка (Этап 15): связи родитель/дети + кнопка новой заявки.
@@ -458,6 +520,29 @@ document.addEventListener('click', function (ev) {
     return;
   }
 
+  // Теги заявки (Этап 17): крестик на чипе и кнопка «свой тег».
+  const removeTagBtn = sel('[data-remove-tag]');
+  if (removeTagBtn) {
+    const o = findOrderById(state.orderId);
+    if (o && canEditOrder(o)) {
+      removeTag(o, removeTagBtn.getAttribute('data-remove-tag'));
+      render();
+    }
+    return;
+  }
+
+  const addCustomTagBtn = sel('[data-add-tag-custom]');
+  if (addCustomTagBtn) {
+    const o = findOrderById(state.orderId);
+    const input = document.getElementById('tag-custom');
+    const tag = input ? String(input.value).trim() : '';
+    if (!o || !canEditOrder(o)) return;
+    if (!tag) { toast('Введите тег', true); return; }
+    if (!addTag(o, tag)) { toast('Такой тег уже есть', true); return; }
+    render();
+    return;
+  }
+
   const card = sel('[data-order]');
   if (card) { ORD_TAB = 'main'; go('order', Number(card.getAttribute('data-order'))); return; }
 
@@ -564,6 +649,27 @@ document.addEventListener('change', function (ev) {
     set('nc-client', c.name);
     set('nc-phone', c.phone);
     set('nc-address', [c.city, c.address].filter(Boolean).join(', '));
+    return;
+  }
+
+  // Фильтр списка по тегу (Этап 17): значение 'tag:Тег', пусто — все.
+  const tagFilter = ev.target.closest && ev.target.closest('[data-tag-filter]');
+  if (tagFilter) {
+    const t = String(tagFilter.value || '').trim();
+    state.filter = t ? 'tag:' + t : 'all';
+    render();
+    return;
+  }
+
+  // Добавление тега-пресета к открытой заявке (Этап 17).
+  const tagPreset = ev.target.closest && ev.target.closest('[data-add-tag-preset]');
+  if (tagPreset) {
+    const o = findOrderById(state.orderId);
+    const tag = String(tagPreset.value || '').trim();
+    if (!o || !tag) return;
+    if (!canEditOrder(o)) { toast('Нельзя редактировать заявку', true); return; }
+    if (!addTag(o, tag)) { toast('Такой тег уже есть', true); return; }
+    render();
     return;
   }
 });
