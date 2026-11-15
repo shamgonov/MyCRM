@@ -332,6 +332,19 @@ document.addEventListener('click', function (ev) {
   const takeBtn = sel('[data-take-order]');
   if (takeBtn) { doTakeOrder(Number(takeBtn.getAttribute('data-take-order'))); return; }
 
+  // Подтверждение «Всё равно взять» в модалке пересечения при взятии.
+  const forceTakeBtn = sel('[data-force-take]');
+  if (forceTakeBtn) {
+    if (window.__takePending === null || window.__takePending === undefined) {
+      closeModal();
+      return;
+    }
+    applyTakeOrder(window.__takePending);
+    window.__takePending = null;
+    closeModal();
+    return;
+  }
+
   const confirmBtn = sel('[data-confirm-helper]');
   if (confirmBtn) {
     const parts = String(confirmBtn.getAttribute('data-confirm-helper')).split('|');
