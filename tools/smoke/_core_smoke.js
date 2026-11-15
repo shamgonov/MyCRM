@@ -34,12 +34,13 @@ assert(Array.isArray(state.navHistory) && state.navHistory.length === 0,
 // --- NAVS_BASE: структура и состав
 assert.eq(Object.keys(NAVS_BASE).length, 4, 'NAVS_BASE: 4 роли');
 assert.eq(NAVS_BASE.admin.length, 7, 'admin: 7 пунктов меню');
-assert.eq(NAVS_BASE.operator.length, 5, 'operator: 5 пунктов');
+assert.eq(NAVS_BASE.operator.length, 6, 'operator: 6 пунктов');
 assert.eq(NAVS_BASE.manager.length, 5, 'manager: 5 пунктов');
 assert.eq(NAVS_BASE.worker.length, 3, 'worker: 3 пункта');
 assert.eq(NAVS_BASE.admin[0][0], 'orders', 'admin первый пункт — orders');
 assert.eq(NAVS_BASE.admin[6][0], 'admin', 'admin последний пункт — админ');
-assert.eq(NAVS_BASE.operator[3][0], 'create', 'operator имеет «Новая»');
+assert.eq(NAVS_BASE.operator[1][0], 'clients', 'operator имеет «Контрагенты» (Этап 16)');
+assert.eq(NAVS_BASE.operator[4][0], 'create', 'operator имеет «Новая»');
 assert.eq(NAVS_BASE.worker[0][0], 'tasks', 'worker первый пункт — поиск заказов');
 NAVS_BASE.worker.forEach(function (it) {
   assert(Array.isArray(it) && it.length === 3, 'пункт меню — [key, ico, label]');

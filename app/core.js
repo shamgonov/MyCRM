@@ -32,6 +32,7 @@ const NAVS_BASE = {
   ],
   operator: [
     ['orders', '📋', 'Заявки'],
+    ['clients', '📇', 'Контрагенты'],
     ['calendar', '📅', 'Календарь'],
     ['shopping', '🛒', 'Закупки'],
     ['create', '➕', 'Новая'],
@@ -166,11 +167,8 @@ const S = {
     return '<h2>📅 Календарь</h2><p class="muted">Модуль UI ещё не загружен.</p>';
   },
   clients: function () {
-    return '<h2>📇 Контрагенты</h2>' +
-      '<div class="card">' +
-        '<p class="muted">Экран в разработке (Этап 9).</p>' +
-        '<p class="small">Здесь будет список клиентов с историей заказов.</p>' +
-      '</div>';
+    if (typeof renderClients === 'function') return renderClients();
+    return '<h2>📇 Контрагенты</h2><p class="muted">Модуль UI ещё не загружен.</p>';
   },
   overdue: function () {
     return '<h2>⏰ Просроченные заявки</h2>' +

@@ -352,8 +352,12 @@ function doFollowUp(id) {
 // --- 5. Модалка создания заявки ---
 
 function renderCreateOrderModal() {
+  var clients = (DB.clients || []).map(function (c) {
+    return '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>';
+  }).join('');
   showModal(
     '<h3>Новая заявка</h3>' +
+    '<label class="field"><span>Контрагент</span><select id="co-client-id"><option value="">— вручную —</option>' + clients + '</select></label>' +
     '<label class="field"><span>Клиент *</span><input id="nc-client" type="text"></label>' +
     '<label class="field"><span>Телефон</span><input id="nc-phone" type="tel"></label>' +
     '<label class="field"><span>Адрес</span><input id="nc-address" type="text"></label>' +
@@ -493,7 +497,7 @@ document.addEventListener('click', function (ev) {
       showConflictModal(conflicts, data);
       return;
     }
-    createOrder(data);
+    saveOrderWithClient(data);
     closeModal();
     state.filter = 'all';
     go('orders');
@@ -501,23 +505,65 @@ document.addEventListener('click', function (ev) {
   }
 });
 
+// Создание заявки с привязкой к контрагенту (Этап 16): o.clientId + orderIds
+// контрагента + clientLegal для юрлиц (документы берут отсюда реквизиты).
+function saveOrderWithClient(data) {
+  const selEl = document.getElementById('co-client-id');
+  const cid = selEl ? Number(selEl.value) : 0;
+  const c = cid ? (DB.clients || []).find(function (x) { return x.id === cid; }) : null;
+  if (c) {
+    data.clientId = c.id;
+    if (c.kind === 'company' || c.kind === 'ip') {
+      data.clientLegal = {
+        name: c.name, inn: c.inn || '', kpp: c.kpp || '',
+        ogrn: c.ogrn || '', phone: c.phone || ''
+      };
+    }
+  }
+  const o = createOrder(data);
+  if (c && o) {
+    if (!Array.isArray(c.orderIds)) c.orderIds = [];
+    c.orderIds.push(o.id);
+    save();
+  }
+  return o;
+}
+
 // Смена статуса — событие change (не click).
 document.addEventListener('change', function (ev) {
   const select = ev.target.closest && ev.target.closest('[data-status-select]');
-  if (!select) return;
-  const id = Number(select.getAttribute('data-status-select'));
-  const ns = select.value;
-  if (!ns) return;
-  if (transitionOrder(id, ns)) {
-    toast('Статус: ' + (STATUS_LABELS[ns] || ns));
-    render();
-    // Завершение с долгом: предлагаем напоминание об остатке (Этап 12).
-    if (ns === 'completed' && typeof orderBalance === 'function' &&
-        typeof showBalanceReminderModal === 'function') {
-      const done = (DB.orders || []).find(function (x) { return x.id === id; });
-      if (done && orderBalance(done) > 0) showBalanceReminderModal(done);
+  if (select) {
+    const id = Number(select.getAttribute('data-status-select'));
+    const ns = select.value;
+    if (!ns) return;
+    if (transitionOrder(id, ns)) {
+      toast('Статус: ' + (STATUS_LABELS[ns] || ns));
+      render();
+      // Завершение с долгом: предлагаем напоминание об остатке (Этап 12).
+      if (ns === 'completed' && typeof orderBalance === 'function' &&
+          typeof showBalanceReminderModal === 'function') {
+        const done = (DB.orders || []).find(function (x) { return x.id === id; });
+        if (done && orderBalance(done) > 0) showBalanceReminderModal(done);
+      }
+    } else {
+      toast('Переход не разрешён', true);
     }
-  } else {
-    toast('Переход не разрешён', true);
+    return;
+  }
+
+  // Выбор контрагента из справочника — подставляем реквизиты в форму (Этап 16).
+  const clientSel = ev.target.closest && ev.target.closest('#co-client-id');
+  if (clientSel) {
+    const cid = Number(clientSel.value);
+    const c = (DB.clients || []).find(function (x) { return x.id === cid; });
+    const set = function (id, v) {
+      const el = document.getElementById(id);
+      if (el) el.value = v || '';
+    };
+    if (!c) { set('nc-client', ''); set('nc-phone', ''); set('nc-address', ''); return; }
+    set('nc-client', c.name);
+    set('nc-phone', c.phone);
+    set('nc-address', [c.city, c.address].filter(Boolean).join(', '));
+    return;
   }
 });
