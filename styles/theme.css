@@ -201,8 +201,27 @@ input:focus, select:focus, textarea:focus {
 }
 
 /* --- Табы карточки заявки --- */
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); margin: 10px 0; }
+/* Этап 29-fix: горизонтальный скролл — на телефоне 6 табов не помещаются,
+   без overflow-x часть вкладок была недоступна. Образец — .nav-scroll. */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--line);
+  margin: 10px 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--card);
+  justify-content: flex-start;
+}
+.tabs::-webkit-scrollbar { height: 4px; }
+.tabs::-webkit-scrollbar-track { background: var(--card); border-radius: 999px; }
+.tabs::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
 .tab-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
   border: 0;
   background: transparent;
   color: var(--muted);

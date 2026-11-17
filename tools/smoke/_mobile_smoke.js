@@ -69,6 +69,21 @@ assert(chipsRule.indexOf('flex-wrap: nowrap') >= 0, '3: .chips → flex-wrap: no
 var chipItem = ruleBody('\\.chips\\s*>\\s*\\.chip(?![\\w-])[^{]*');
 assert(chipItem.indexOf('flex: 0 0 auto') >= 0, '3: чип не сжимается (flex: 0 0 auto)');
 
+// --- 3.1 Табы карточки заявки: горизонтальный скролл (6 табов на телефоне) ---
+
+var tabsRule = ruleBody('\\.tabs(?![\\w-])');
+assert(tabsRule.indexOf('overflow-x: auto') >= 0, '3.1: .tabs → overflow-x: auto');
+assert(tabsRule.indexOf('overflow-y: hidden') >= 0, '3.1: .tabs → overflow-y: hidden');
+assert(tabsRule.indexOf('-webkit-overflow-scrolling: touch') >= 0,
+  '3.1: .tabs → инерционный скролл на touch');
+assert(tabsRule.indexOf('overscroll-behavior-x: contain') >= 0,
+  '3.1: .tabs → overscroll-behavior-x: contain');
+assert(tabsRule.indexOf('justify-content: flex-start') >= 0,
+  '3.1: .tabs → justify-content: flex-start');
+var tabBtnRule = ruleBody('\\.tab-btn(?![\\w-])');
+assert(tabBtnRule.indexOf('flex: 0 0 auto') >= 0, '3.1: .tab-btn не сжимается');
+assert(tabBtnRule.indexOf('white-space: nowrap') >= 0, '3.1: .tab-btn → nowrap');
+
 // --- 4. Нижняя навигация ---
 
 var navScroll = ruleBody('\\.nav-scroll');
