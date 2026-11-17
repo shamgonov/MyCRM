@@ -1118,9 +1118,14 @@ document.addEventListener('click', function (ev) {
 
 // Создание заявки с привязкой к контрагенту (Этап 16): o.clientId + orderIds
 // контрагента + clientLegal для юрлиц (документы берут отсюда реквизиты).
+// Этап 30: без выбранного контрагента в модалке привязка идёт по имени
+// и телефону (getOrCreateClient; авто-создание карточки требует clients_edit).
 function saveOrderWithClient(data) {
   const selEl = document.getElementById('co-client-id');
-  const cid = selEl ? Number(selEl.value) : 0;
+  let cid = selEl ? Number(selEl.value) : 0;
+  if (!cid && typeof getOrCreateClient === 'function') {
+    cid = getOrCreateClient(data.client, data.phone, data.address) || 0;
+  }
   const c = cid ? (DB.clients || []).find(function (x) { return x.id === cid; }) : null;
   if (c) {
     data.clientId = c.id;

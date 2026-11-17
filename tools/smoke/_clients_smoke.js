@@ -93,7 +93,7 @@ assert(cardHtml.indexOf('Ромашка') >= 0, 'карточка: имя (escap
 assert(cardHtml.indexOf('ЮЛ') >= 0, 'карточка: тип ЮЛ');
 assert(cardHtml.indexOf('Реквизиты') >= 0, 'карточка: реквизиты');
 assert(cardHtml.indexOf('1234567890') >= 0, 'карточка: ИНН');
-assert(cardHtml.indexOf('История заявок') >= 0, 'карточка: история');
+assert(cardHtml.indexOf('Журнал заявок') >= 0, 'карточка: журнал заявок');
 assert(cardHtml.indexOf('data-edit-client=') >= 0, 'карточка: кнопка редактирования');
 assert(cardHtml.indexOf('data-del-client=') >= 0, 'карточка: кнопка удаления');
 
@@ -165,7 +165,22 @@ assert.eq(order2.clientId, 11, 'интеграция: физлицо привя�
 assert(!order2.clientLegal, 'интеграция: физлицу clientLegal не нужен');
 assert.eq(buildClientDossier(person).phones.length, 1, 'досье: телефон из заявки');
 
-// Заявка без контрагента — как раньше, без clientId.
+// Этап 30: заявка без выбора контрагента из справочника теперь привязывается
+// автоматически — по имени создаётся новая карточка (право clients_edit есть).
+var clientsBefore = (DB.clients || []).length;
 fields['co-client-id'] = { value: '' };
 var order3 = saveOrderWithClient({ client: 'Случайный', date: localToday(), t1: '', t2: '' });
-assert(order3.clientId === undefined, 'интеграция: без справочника clientId нет');
+assert(order3.clientId !== undefined, 'Этап 30: авто-привязка проставила clientId');
+assert.eq((DB.clients || []).length, clientsBefore + 1, 'Этап 30: карточка создана автоматически');
+var autoClient = (DB.clients || []).find(function (x) { return x.id === order3.clientId; });
+assert(!!autoClient && autoClient.name === 'Случайный', 'Этап 30: карточка с именем из заявки');
+assert(autoClient.orderIds.indexOf(order3.id) >= 0, 'Этап 30: заявка записана в orderIds');
+
+// Нет права clients_edit (worker) → авто-создание не срабатывает, clientId нет.
+login('worker', 'Мастер');
+var clientsNoEdit = (DB.clients || []).length;
+fields['co-client-id'] = { value: '' };
+var order4 = saveOrderWithClient({ client: 'Чужой Имя', date: localToday(), t1: '', t2: '' });
+assert(order4.clientId === undefined, 'Этап 30: worker без clients_edit — без авто-создания');
+assert.eq((DB.clients || []).length, clientsNoEdit, 'Этап 30: карточек не прибавилось');
+login('operator', 'Мария');

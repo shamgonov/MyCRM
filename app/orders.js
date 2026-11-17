@@ -102,6 +102,22 @@ function saveOrderLocal(o) {
   return o;
 }
 
+// getOrCreateClient(name, phone, address): подбор контрагента для заявки
+// (Этап 30). Совпадение по имени/телефону → id существующего; иначе создание
+// новой карточки, если есть право clients_edit. Иначе null (заявка без привязки).
+// findSimilarClients/addClient живут в ui-clients.js — ленивые вызовы через typeof.
+function getOrCreateClient(name, phone, address) {
+  var n = (name || '').trim();
+  if (!n) return null;
+  if (typeof findSimilarClients === 'function') {
+    var found = findSimilarClients(n, phone || '');
+    if (found && found.length) return found[0].id;
+  }
+  if (typeof can === 'function' && !can('clients_edit')) return null;
+  if (typeof addClient !== 'function') return null;
+  return addClient({ name: n, phone: (phone || '').trim(), address: (address || '').trim() });
+}
+
 // createOrder(data): дефолты + история создания + сохранение.
 function createOrder(data) {
   const o = Object.assign({}, data || {});
