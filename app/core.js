@@ -123,7 +123,49 @@ function render() {
   const syncChip = (typeof renderSyncStatus === 'function' && state.role) ? renderSyncStatus() : '';
   app.innerHTML = banner + syncChip + fn();
   renderNav();
+  // Точечная инициализация таймеров обратного отсчёта (Микро-этап): меняем
+  // только текст/класс уже отрендеренных span.countdown-timer, без render().
+  updateAllCountdowns();
 }
+
+// --- Таймер обратного отсчёта (Микро-этап) ---
+// Обновляет ТЕКСТ и КЛАСС элементов .countdown-timer по их data-target.
+// Никакого render()/перерисовки экранов: только точечные DOM-записи.
+// Гарды обязательны: в смоук-контекстах нет setInterval/querySelectorAll.
+function updateAllCountdowns() {
+  if (typeof document === 'undefined' || !document ||
+      typeof document.querySelectorAll !== 'function') return 0;
+  var nodes = document.querySelectorAll('.countdown-timer');
+  if (!nodes || !nodes.length) return 0;
+  var now = Date.now();
+  for (var i = 0; i < nodes.length; i++) {
+    var el = nodes[i];
+    var target = Number(el.getAttribute('data-target'));
+    if (!target) continue;
+    var type = el.getAttribute('data-type') || 'visit';
+    var diff = target - now;
+    el.textContent = (typeof countdownLabel === 'function')
+      ? countdownLabel(type, diff)
+      : (diff <= 0 ? 'просрочено' : String(Math.ceil(diff / 60000)) + ' мин.');
+    el.className = 'countdown-timer ' + ((typeof countdownVariantClass === 'function')
+      ? countdownVariantClass(diff)
+      : (diff <= 0 ? 'countdown-overdue' : 'countdown-ok'));
+  }
+  return nodes.length;
+}
+
+// Запуск интервала раз в минуту. Повторный вызов не плодит дубликаты.
+function startCountdownTicker() {
+  if (typeof setInterval !== 'function') return null;
+  if (typeof window !== 'undefined' && window.__countdownInterval) {
+    return window.__countdownInterval;
+  }
+  var id = setInterval(function () { updateAllCountdowns(); }, 60000);
+  if (typeof window !== 'undefined') window.__countdownInterval = id;
+  return id;
+}
+
+startCountdownTicker();
 
 // renderNavActive(): перерисовка только навигации (подсветка active).
 // --- Счётчики событий на пунктах навигации (Этап 27) ---

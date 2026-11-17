@@ -57,6 +57,78 @@ function allOrderTags() {
 
 var EXPANDED_ORDERS = {}; // { [id]: true } — развёрнутые карточки
 
+// --- 0.1 Таймер обратного отсчёта (Микро-этап) ---
+// Точечное обновление DOM: рендер отдаёт плейсхолдер с data-target, а
+// updateAllCountdowns() в core.js меняет только текст/класс по data-атрибутам.
+// НИКАКОГО render() из таймера.
+
+// Статусы, для которых обратный отсчёт до визита не показываем.
+var COUNTDOWN_TERMINAL = ['completed', 'paid', 'canceled'];
+
+// Epoch-миллисекунды начала визита (date + t1) или null, если данных нет.
+function visitStartTs(o) {
+  if (!o || !o.date || !o.t1) return null;
+  var d = new Date(o.date + 'T' + o.t1);
+  var ts = d.getTime();
+  return isNaN(ts) ? null : ts;
+}
+
+// Обратный отсчёт «уже просрочено» (diff <= 0) — отдельный вид.
+function isCountdownOverdue(o) {
+  if (!o) return false;
+  if (o.callbackAt) return Number(o.callbackAt) <= Date.now();
+  var v = visitStartTs(o);
+  if (v === null) return false;
+  if (COUNTDOWN_TERMINAL.indexOf(o.status) >= 0) return false;
+  return v <= Date.now();
+}
+
+// Человекочитаемый остаток времени: "3 д. 4 ч." / "2 ч. 5 мин." / "12 мин.".
+function formatCountdown(ms) {
+  var total = Math.max(0, Math.floor(ms / 60000)); // минуты
+  var days = Math.floor(total / 1440);
+  var hours = Math.floor((total % 1440) / 60);
+  var mins = total % 60;
+  if (days > 0) return days + ' д. ' + hours + ' ч.';
+  if (hours > 0) return hours + ' ч. ' + mins + ' мин.';
+  return mins + ' мин.';
+}
+
+// Класс цвета по остатку: >24ч — ok, >2ч — warn, иначе danger.
+function countdownVariantClass(ms) {
+  if (ms <= 0) return 'countdown-overdue';
+  if (ms > 24 * 3600000) return 'countdown-ok';
+  if (ms > 2 * 3600000) return 'countdown-warn';
+  return 'countdown-danger';
+}
+
+// Текст бейджа обратного отсчёта по типу и остатку.
+function countdownLabel(type, ms) {
+  if (ms <= 0) return type === 'callback' ? '🔴 Перезвон просрочен' : '🔴 Визит просрочен';
+  var word = type === 'callback' ? 'до перезвона' : 'до визита';
+  return '⏳ ' + word + ': ' + formatCountdown(ms);
+}
+
+// Плейсхолдер таймера для карточки/списка. Приоритет: callbackAt > визит.
+// Текст и класс считаются сразу, чтобы не ждать первого тика интервала.
+function renderCountdownBadge(o) {
+  if (!o) return '';
+  var target = null;
+  var type = '';
+  if (o.callbackAt && Number(o.callbackAt) > 0) {
+    target = Number(o.callbackAt);
+    type = 'callback';
+  } else if (COUNTDOWN_TERMINAL.indexOf(o.status) < 0) {
+    var v = visitStartTs(o);
+    if (v !== null) { target = v; type = 'visit'; }
+  }
+  if (target === null) return '';
+  var diff = target - Date.now();
+  return '<span id="cd-' + type + '-' + o.id + '" class="countdown-timer ' +
+    countdownVariantClass(diff) + '" data-target="' + target + '" data-type="' + type + '">' +
+    countdownLabel(type, diff) + '</span>';
+}
+
 // --- 1. Список заявок ---
 
 function renderOrdersList() {
@@ -137,6 +209,7 @@ function renderOrderListItemCollapsed(o) {
     '<div class="small muted">' + escapeHtml(o.date || '—') + ' ' +
       escapeHtml(o.t1 || '') + '-' + escapeHtml(o.t2 || '') +
       ' · 👷 ' + worker + '</div>' +
+    (typeof renderCountdownBadge === 'function' ? renderCountdownBadge(o) : '') +
     (badges ? '<div class="small" style="margin-top:4px">' + badges + '</div>' : '') +
   '</div>';
 }
@@ -156,6 +229,7 @@ function renderOrderListItemExpanded(o) {
     '</div>' +
     '<div class="small muted">📅 ' + escapeHtml(o.date || '—') + ' ' +
       escapeHtml(o.t1 || '') + '-' + escapeHtml(o.t2 || '') + '</div>' +
+    (typeof renderCountdownBadge === 'function' ? renderCountdownBadge(o) : '') +
     '<div class="small">👷 ' + worker + '</div>' +
     (o.phone ? '<div class="small">📞 <a href="tel:' + escapeHtml(o.phone) + '">' +
       escapeHtml(o.phone) + '</a></div>' : '') +
@@ -267,6 +341,7 @@ function renderOrderTabMain(o) {
           '</select>'
         : '<span class="small muted">Переходов нет</span>') +
     '</div>' +
+    (typeof renderCountdownBadge === 'function' ? renderCountdownBadge(o) : '') +
   '</div>';
 
   return '<div class="card info-block">' +
