@@ -364,6 +364,12 @@ function renderOrderTeamBlock(o, editable) {
   if (o.worker && editable && canReleaseToPool(o)) {
     actions += '<button class="btn" data-release-pool="' + o.id + '" style="margin-top:8px">🤝 Отдать в пул</button>';
   }
+  // Назначение / смена основного исполнителя.
+  if (editable && can('order_assign') &&
+      o.status !== 'completed' && o.status !== 'paid' && o.status !== 'canceled') {
+    actions += '<button class="btn" data-assign-worker="' + o.id + '" style="margin-top:8px">' +
+      (o.worker ? '✎ Сменить исполнителя' : '👷 Назначить исполнителя') + '</button>';
+  }
 
   return '<div class="card info-block">' +
       '<h4>Исполнители</h4>' +
@@ -469,6 +475,80 @@ function renderHelperModal(o) {
   );
 }
 
+// --- Назначение основного исполнителя (после создания заявки) ---
+
+// Модалка выбора основного исполнителя: сотрудники из DB.users, текущий
+// помечен; пустой выбор = «в пул» (снятие исполнителя).
+function renderAssignWorkerModal(o) {
+  var names = (DB.users || []).map(function (u) { return u.name; }).filter(Boolean);
+  if (!names.length) { toast('В админке нет сотрудников', true); return; }
+  var opts = '<option value="">🤝 В пул (снять исполнителя)</option>' +
+    names.map(function (n) {
+      return '<option value="' + escapeHtml(n) + '"' + (n === o.worker ? ' selected' : '') + '>' +
+        escapeHtml(n) + (n === o.worker ? ' — текущий' : '') + '</option>';
+    }).join('');
+  showModal(
+    '<h3>Исполнитель заявки №' + o.id + '</h3>' +
+    '<p class="small muted">Сейчас: <b>' + escapeHtml(o.worker || '— не назначен —') + '</b></p>' +
+    '<label class="field"><span>Основной исполнитель</span><select id="aw-name">' + opts + '</select></label>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-save-worker="' + o.id + '" style="flex:1">Назначить</button>' +
+    '</div>'
+  );
+}
+
+// Пересечение слота у выбранного сотрудника — подтверждение назначения.
+function showAssignConflictModal(conflicts, name) {
+  var nums = conflicts.map(function (c) { return '№' + c.id; }).join(', ');
+  showModal(
+    '<h3>⚠️ Пересечение по времени</h3>' +
+    '<p>У сотрудника <b>' + escapeHtml(name) + '</b> уже есть заявки в это время: <b>' + nums + '</b>.</p>' +
+    '<p class="small muted">Если это один подъезд или адреса рядом, назначать можно.</p>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-force-assign style="flex:1">✅ Всё равно назначить</button>' +
+    '</div>'
+  );
+}
+
+// doAssignWorker(id, name): name='' → снятие в пул; конфликт по времени →
+// модалка подтверждения (данные ждём в window.__assignPending).
+function doAssignWorker(id, name) {
+  var o = findOrderById(id);
+  if (!o) return;
+  if (!name) {
+    if (typeof canReleaseToPool === 'function' && canReleaseToPool(o)) {
+      releaseOrderToPool(id);
+    } else {
+      toast('Нельзя снять исполнителя в этом статусе', true);
+    }
+    closeModal();
+    render();
+    return;
+  }
+  if (name === o.worker) { closeModal(); toast('Исполнитель не изменился'); return; }
+  var probe = { date: o.date, t1: o.t1, t2: o.t2, worker: name };
+  var conflicts = (typeof checkTimeConflict === 'function') ? checkTimeConflict(probe) : [];
+  if (conflicts.length) {
+    window.__assignPending = { id: id, name: name };
+    showAssignConflictModal(conflicts, name);
+    return;
+  }
+  applyAssignWorker(id, name);
+}
+
+function applyAssignWorker(id, name) {
+  var o = findOrderById(id);
+  if (!o) return false;
+  if (!assignWorker(o, name)) { toast('Не удалось назначить исполнителя', true); return false; }
+  window.__assignPending = null;
+  closeModal();
+  toast('Исполнитель: ' + name);
+  render();
+  return true;
+}
+
 // --- Перенос остатка: модалка (Этап 15) ---
 
 function renderFollowUpModal(o) {
@@ -557,10 +637,10 @@ document.addEventListener('click', function (ev) {
   if (createBtn) { renderCreateOrderModal(); return; }
 
   const closeBtn = sel('[data-close]');
-  if (closeBtn) { closeModal(); return; }
+  if (closeBtn) { closeModal(); window.__assignPending = null; return; }
 
   const overlay = sel('[data-modal-overlay]');
-  if (overlay && ev.target === overlay) { closeModal(); return; }
+  if (overlay && ev.target === overlay) { closeModal(); window.__assignPending = null; return; }
 
   // Кнопки пула и подтверждения стоят ВНУТРИ карточки [data-order], поэтому их
   // проверяем раньше перехода по карточке — иначе клик откроет заявку.
@@ -678,6 +758,33 @@ document.addEventListener('click', function (ev) {
   const releaseBtn = sel('[data-release-pool]');
   if (releaseBtn) {
     releaseOrderToPool(Number(releaseBtn.getAttribute('data-release-pool')));
+    return;
+  }
+
+  // Назначение / смена основного исполнителя.
+  const assignBtn = sel('[data-assign-worker]');
+  if (assignBtn) {
+    const o = findOrderById(Number(assignBtn.getAttribute('data-assign-worker')));
+    if (o && can('order_assign')) { renderAssignWorkerModal(o); }
+    else { toast('Нет права назначать исполнителя', true); }
+    return;
+  }
+
+  // Сохранение выбора исполнителя из модалки.
+  const saveWorkerBtn = sel('[data-save-worker]');
+  if (saveWorkerBtn) {
+    const id = Number(saveWorkerBtn.getAttribute('data-save-worker'));
+    const el = document.getElementById('aw-name');
+    doAssignWorker(id, el ? el.value : '');
+    return;
+  }
+
+  // «Всё равно назначить» — подтверждение конфликта при смене исполнителя.
+  const forceAssignBtn = sel('[data-force-assign]');
+  if (forceAssignBtn) {
+    const p = window.__assignPending;
+    if (p) { applyAssignWorker(p.id, p.name); }
+    else { closeModal(); }
     return;
   }
 

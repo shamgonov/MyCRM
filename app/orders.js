@@ -256,6 +256,32 @@ function assignHelper(o, helperName) {
   return true;
 }
 
+// Назначить основного исполнителя после создания. '' не принимается —
+// для снятия исполнителя существует releaseOrderToPool().
+function assignWorker(o, name) {
+  if (!o || !name) return false;
+  if (o.status === 'completed' || o.status === 'paid' || o.status === 'canceled') return false;
+  if (o.worker === name) return false;
+  normalizeOrder(o);
+  // Повышение соисполнителя: убираем из helpers и снимаем его подтверждение.
+  if (Array.isArray(o.helpers)) {
+    var hi = o.helpers.indexOf(name);
+    if (hi >= 0) o.helpers.splice(hi, 1);
+  }
+  if (o.confirm && o.confirm[name]) delete o.confirm[name];
+  var old = o.worker || '';
+  o.worker = name;
+  o.takenAt = Date.now();
+  o.takenBy = state.user;
+  o.history.push({
+    ts: Date.now(), by: state.user, action: 'assign_worker',
+    details: old ? ('Исполнитель сменён: ' + old + ' → ' + name)
+                 : ('Исполнитель назначен: ' + name)
+  });
+  saveOrderLocal(o);
+  return true;
+}
+
 // Подтвердить соисполнителя: 'ok' или 'no'.
 function confirmHelper(o, helperName, decision) {
   if (!o || !helperName || !o.confirm || !o.confirm[helperName]) return false;
