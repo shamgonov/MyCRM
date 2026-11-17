@@ -103,7 +103,11 @@ a:hover { text-decoration: underline; }
   flex: 0 0 auto;
   white-space: nowrap;
 }
-.spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Заголовок экрана тянется, кнопка действия не сжимается и переносится
+   целиком на новую строку, если ширины не хватает (Этап 33). */
+.spread h2 { margin: 0; flex: 1 1 auto; min-width: 200px; overflow-wrap: break-word; }
+.spread > .btn { flex-shrink: 0; white-space: nowrap; }
 
 /* --- Карточки --- */
 .card {
@@ -232,9 +236,12 @@ input:focus, select:focus, textarea:focus {
 }
 .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
 
-/* --- Шапка карточки --- */
-.head-row { display: flex; align-items: center; gap: 8px; }
-.head-row h2 { flex: 1; margin: 0; }
+/* --- Шапка карточки (Этап 33: перенос на узких экранах) --- */
+.head-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.head-row h2 { flex: 1 1 auto; min-width: 0; margin: 0; }
+/* Кнопки шапки (←, ✎, 🗑) не сжимаются и не переносятся внутри себя;
+   только прямые дети — вложенные .row > .btn (Этап 26) не трогаем. */
+.head-row > .btn { flex-shrink: 0; white-space: nowrap; }
 
 /* --- Смета --- */
 .est-row { display: flex; justify-content: space-between; gap: 8px; padding: 6px 0; border-bottom: 1px dashed var(--line); }

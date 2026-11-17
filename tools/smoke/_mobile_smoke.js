@@ -97,6 +97,41 @@ var otsBtn = ruleBody('\\.order-tabs-scroll \\.tab-btn(?![\\w-])');
 assert(otsBtn.indexOf('flex: 0 0 auto') >= 0, '3.2: вкладки не сжимаются');
 assert(otsBtn.indexOf('scroll-snap-align: start') >= 0, '3.2: snap к началу вкладки');
 
+// --- 3.3 Этап 33: заголовки и панели действий переносятся, а не вылезают ---
+
+// .spread: flex-wrap + отступ между перенесёнными элементами.
+var spreadRule = ruleBody('\\.spread(?![\\w-])');
+assert(spreadRule.indexOf('display: flex') >= 0, '3.3: .spread → display: flex (регрессия)');
+assert(spreadRule.indexOf('flex-wrap: wrap') >= 0, '3.3: .spread → flex-wrap: wrap');
+assert(spreadRule.indexOf('gap: 8px') >= 0, '3.3: .spread → gap: 8px');
+// Заголовок тянется, но не сплющивается в ноль и переносит длинные слова.
+var spreadH2 = ruleBody('\\.spread\\s+h2');
+assert(spreadH2.indexOf('flex: 1 1 auto') >= 0, '3.3: .spread h2 → flex: 1 1 auto');
+assert(spreadH2.indexOf('min-width: 200px') >= 0, '3.3: .spread h2 → min-width: 200px');
+assert(spreadH2.indexOf('overflow-wrap: break-word') >= 0,
+  '3.3: .spread h2 → перенос длинных названий');
+// Кнопка действия не сжимается и не разрывается внутри себя.
+var spreadBtn = ruleBody('\\.spread\\s*>\\s*\\.btn(?![\\w-])');
+assert(spreadBtn.indexOf('flex-shrink: 0') >= 0, '3.3: .spread > .btn → flex-shrink: 0');
+assert(spreadBtn.indexOf('white-space: nowrap') >= 0, '3.3: .spread > .btn → nowrap');
+
+// .head-row: шапка карточки (кнопка «←», заголовок, бейдж).
+var headRule = ruleBody('\\.head-row(?![\\w-])');
+assert(headRule.indexOf('display: flex') >= 0, '3.3: .head-row → display: flex (регрессия)');
+assert(headRule.indexOf('flex-wrap: wrap') >= 0, '3.3: .head-row → flex-wrap: wrap');
+assert(headRule.indexOf('gap: 8px') >= 0, '3.3: .head-row → gap: 8px');
+var headH2 = ruleBody('\\.head-row\\s+h2');
+assert(headH2.indexOf('flex: 1 1 auto') >= 0, '3.3: .head-row h2 → flex: 1 1 auto');
+assert(headH2.indexOf('min-width: 0') >= 0, '3.3: .head-row h2 → min-width: 0');
+var headBtn = ruleBody('\\.head-row\\s*>\\s*\\.btn(?![\\w-])');
+assert(headBtn.indexOf('flex-shrink: 0') >= 0, '3.3: .head-row > .btn → flex-shrink: 0');
+assert(headBtn.indexOf('white-space: nowrap') >= 0, '3.3: .head-row > .btn → nowrap');
+
+// Регрессия Этапа 26: вложенные кнопки рядов не получили nowrap (иначе
+// flex-wrap: wrap в .row перестал бы работать).
+assert(ruleBody('\\.row\\s*>\\s*\\.btn(?![\\w-])').indexOf('white-space: nowrap') < 0,
+  '3.3: .row > .btn без nowrap (flex-wrap ряда сохранён)');
+
 // --- 4. Нижняя навигация ---
 
 var navScroll = ruleBody('\\.nav-scroll');
@@ -220,3 +255,26 @@ appStub.style = {};
 render();
 assert(String(appStub.style.paddingBottom).indexOf('--nav-h') >= 0,
   '6: на входе padding-bottom тоже проставлен');
+
+// --- 7. Этап 33: кнопки действий карточки контрагента в .row ---
+
+loadModule('app/ui-clients.js');
+login('admin', 'Владелец');
+DB.clients = [{
+  id: 1, name: 'АдаптивТест', kind: 'person', inn: '', kpp: '', ogrn: '',
+  phone: '', email: '', city: '', address: '', notes: '', orderIds: []
+}];
+var clCard = renderClientCard(DB.clients[0]);
+var rowPos = clCard.indexOf('<div class="row" style="margin-top:10px">');
+var editPos = clCard.indexOf('data-edit-client');
+var delPos = clCard.indexOf('data-del-client');
+assert(rowPos >= 0 && editPos > rowPos && delPos > rowPos,
+  '7: кнопки ✎/🗑 карточки обёрнуты в .row (перенос на телефоне)');
+assert(clCard.indexOf('style="margin-top:10px">✎') < 0 &&
+       clCard.indexOf('style="margin-top:10px">🗑') < 0,
+  '7: инлайн-margin у самих кнопок убран (ряд даёт отступ)');
+// Заголовок списка + кнопка — в .spread без жёстких ширины.
+var clList = renderClientList();
+assert(clList.indexOf('<div class="spread">') >= 0, '7: заголовок списка в .spread');
+assert(clList.indexOf('style="width:') < 0 && clList.indexOf('style="min-width:') < 0,
+  '7: в списке контрагентов нет инлайн-ширин');

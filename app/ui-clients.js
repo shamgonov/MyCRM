@@ -142,10 +142,13 @@ function renderClientCard(c) {
     'Адрес: ' + ([c.city, c.address].filter(Boolean).join(', '))
   ];
 
+  // Кнопки действий — в .row: на узких экранах переносятся целиком (Этап 33).
   var actions = '';
   if (can('clients_edit')) {
-    actions = '<button class="btn" data-edit-client="' + c.id + '" style="margin-top:10px">✎ Редактировать</button>' +
-      '<button class="btn btn-danger" data-del-client="' + c.id + '" style="margin-top:10px">🗑 Удалить</button>';
+    actions = '<div class="row" style="margin-top:10px">' +
+      '<button class="btn" data-edit-client="' + c.id + '">✎ Редактировать</button>' +
+      '<button class="btn btn-danger" data-del-client="' + c.id + '">🗑 Удалить</button>' +
+      '</div>';
   }
 
   return '<div class="head-row">' +
