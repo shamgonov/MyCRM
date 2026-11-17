@@ -10,6 +10,9 @@
 // Флаги защиты от рекурсии: save() → flushQueue() → save() → ...
 var SYNC_FLUSHING = false; // идёт отправка — вложенные flushQueue игнорируем
 var SYNC_PAUSED = false;   // сетевая ошибка — пауза до новой операции/online
+// Статус для UI-индикатора (Этап 25).
+var SYNC_LAST_ERROR = '';  // текст последней ошибки ('' = нет)
+var SYNC_LAST_OK = 0;      // ts последней успешной отправки
 
 // --- 1. Инициализация ---
 
@@ -120,7 +123,29 @@ function syncAccessChanged() {
   } else {
     SYNC_PAUSED = true;
   }
+  // Этап 25: доступ мог переключить режим индикатора (noaccess ↔ ok).
+  if (typeof refreshSyncStatus === 'function') refreshSyncStatus();
   if (typeof render === 'function' && typeof state !== 'undefined' && state.role) render();
+}
+
+// --- 2.1 Сводка статуса для UI-индикатора (Этап 25) ---
+
+// syncStatus(): чистая функция (без DOM) — режим, очередь, ошибки.
+// mode: 'local'|'noaccess'|'offline'|'sending'|'error'|'ok'
+function syncStatus() {
+  var pending = (typeof DB !== 'undefined' && DB && Array.isArray(DB.syncQueue)) ? DB.syncQueue.length : 0;
+  var online = (typeof navigator === 'undefined' || navigator.onLine !== false);
+  var hasCloud = (typeof firebase !== 'undefined' && !!firebase.firestore);
+  var approved = (typeof cloudApproved === 'function') ? cloudApproved() : false;
+  var mode;
+  if (!hasCloud) mode = 'local';
+  else if (!approved) mode = 'noaccess';
+  else if (!online || SYNC_PAUSED) mode = 'offline';
+  else if (SYNC_FLUSHING) mode = 'sending';
+  else if (SYNC_LAST_ERROR) mode = 'error';
+  else mode = 'ok';
+  return { mode: mode, pending: pending, online: online, approved: approved,
+           lastError: SYNC_LAST_ERROR, lastOk: SYNC_LAST_OK };
 }
 
 // --- 2. Утилиты ---
@@ -176,6 +201,8 @@ function queueOperation(op) {
   SYNC_PAUSED = false; // новое локальное изменение — пробуем отправлять снова
   save();       // очередь переживает перезагрузку (SPEC: офлайн-очередь)
   flushQueue();
+  // Индикатор статуса (Этап 25): очередь изменилась — обновляем чип.
+  if (typeof refreshSyncStatus === 'function') refreshSyncStatus();
   return true;
 }
 
@@ -249,16 +276,25 @@ function pump() {
     return;
   }
   if (p && typeof p.then === 'function') {
-    p.then(function () { pump(); }, function (e) { handleFlushError(e, op); });
+    p.then(function () {
+      // Этап 25: операция ушла в облако — фиксируем успех для индикатора.
+      SYNC_LAST_ERROR = ''; SYNC_LAST_OK = Date.now();
+      pump();
+    }, function (e) { handleFlushError(e, op); });
   } else {
+    SYNC_LAST_ERROR = ''; SYNC_LAST_OK = Date.now();
     pump(); // мок без Promise — считаем успехом
   }
 }
 
 function handleFlushError(e, op) {
   var code = e && e.code;
+  // Этап 25: текст последней ошибки для индикатора (паузу не трогаем —
+  // её семантика ниже: unavailable → unshift+пауза, denied → пропуск).
+  SYNC_LAST_ERROR = String((e && (e.code || e.message)) || 'Ошибка');
   if (code === 'permission-denied') {
     toast('Нет прав на синхронизацию', true);
+    if (typeof refreshSyncStatus === 'function') refreshSyncStatus();
     pump(); // пропускаем операцию, продолжаем очередь
     return;
   }
@@ -272,6 +308,8 @@ function handleFlushError(e, op) {
 function finishFlush() {
   SYNC_FLUSHING = false;
   save(); // фиксируем состояние очереди; вложенный flushQueue пустой — no-op
+  // Этап 25: очередь/флаги изменились — обновляем чип без полного render().
+  if (typeof refreshSyncStatus === 'function') refreshSyncStatus();
 }
 
 // --- 4.5 Общая база справочников (Этап 24) ---
@@ -393,6 +431,8 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
   window.addEventListener('online', function () {
     SYNC_PAUSED = false;
     flushQueue();
+    // Этап 25: сеть вернулась — чип должен перекраситься сразу.
+    if (typeof refreshSyncStatus === 'function') refreshSyncStatus();
   });
 }
 
@@ -413,6 +453,7 @@ window.applyRemoteSettings = applyRemoteSettings;
 window.startCollectionListeners = startCollectionListeners;
 window.startOrdersListener = startOrdersListener;
 window.syncAccessChanged = syncAccessChanged;
+window.syncStatus = syncStatus;
 
 // Автозапуск: в браузере с SDK включаем realtime-подписку; без SDK — false,
 // приложение продолжает работать локально (это штатный офлайн-режим).

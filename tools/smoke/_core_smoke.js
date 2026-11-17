@@ -174,3 +174,18 @@ lsSet('crm2_test_user', 'не-json');
 state.role = null;
 assert.eq(restoreTestSession(), false, 'restoreTestSession: битая запись → false без падения');
 lsSet('crm2_test_user', '');
+
+// --- Этап 25: чип статуса синхронизации в render() (после входа) ---
+// sync.js в этом смоуке НЕ загружен → renderSyncStatus сам отдаёт 'local'.
+loadModule('app/ui-sync.js');
+login('admin', 'Владелец');
+state.screen = 'orders';
+render();
+assert(appEl.innerHTML.indexOf('id="sync-status"') >= 0,
+  'Этап 25: после входа чип синхронизации в #app');
+logout();
+state.role = null;
+state.screen = 'login';
+render();
+assert(appEl.innerHTML.indexOf('id="sync-status"') === -1,
+  'Этап 25: на экране входа чипа нет');

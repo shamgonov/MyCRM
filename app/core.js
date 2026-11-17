@@ -108,7 +108,9 @@ function render() {
   const fn = S[state.screen] || S.login;
   // Баннер статуса облачного доступа (Этап 14-B) — над содержимым экрана.
   const banner = (typeof renderAccessBanner === 'function') ? renderAccessBanner() : '';
-  app.innerHTML = banner + fn();
+  // Индикатор статуса синхронизации (Этап 25): показываем только после входа.
+  const syncChip = (typeof renderSyncStatus === 'function' && state.role) ? renderSyncStatus() : '';
+  app.innerHTML = banner + syncChip + fn();
   renderNav();
 }
 
