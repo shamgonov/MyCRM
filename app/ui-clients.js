@@ -2,17 +2,27 @@
    Зависит от db.js, auth.js, core.js (go/render/showModal/toast). */
 'use strict';
 
-var CL_TAB = 'list'; // 'list' | 'card'
+var CL_TAB = 'list'; // 'list' | 'card' | 'suppliers'
 
 // --- 1. Экран «Контрагенты» ---
 
 function renderClients() {
+  if (CL_TAB === 'suppliers') return renderSuppliersTab();
   if (CL_TAB === 'card' && state.clientId) {
     var c = (DB.clients || []).find(function (x) { return x.id === state.clientId; });
     if (c) return renderClientCard(c);
     CL_TAB = 'list';
   }
   return renderClientList();
+}
+
+// Панель вкладок экрана (Этап 31): список контрагентов / поставщики.
+function renderClientsTabs() {
+  var tabs = [['list', '📇 Контрагенты'], ['suppliers', '🚚 Поставщики']];
+  return '<div class="chips">' + tabs.map(function (t) {
+    var active = (CL_TAB === t[0] || (t[0] === 'list' && CL_TAB === 'card')) ? ' active' : '';
+    return '<button class="chip' + active + '" data-cl-tab="' + t[0] + '">' + t[1] + '</button>';
+  }).join('') + '</div>';
 }
 
 // --- 2. Список контрагентов ---
@@ -39,6 +49,7 @@ function renderClientList() {
         ? '<button class="btn btn-primary" data-new-client>＋ Контрагент</button>'
         : '') +
     '</div>' +
+    renderClientsTabs() +
     '<div class="card">' +
       (rows.length
         ? '<div class="list">' + rows.join('') + '</div>'
@@ -50,6 +61,47 @@ function clientKindLabel(k) {
   if (k === 'ip') return 'ИП';
   if (k === 'company') return 'ЮЛ';
   return 'Физ. лицо';
+}
+
+// --- 2.1 Вкладка «🚚 Поставщики» (Этап 31) ---
+// Данные и сохранение — общие с админкой (saveSupplier/deleteSupplier из
+// orders.js, модалка и делегаты — из ui-admin.js: data-add-supplier,
+// data-edit-supplier, data-delete-supplier). Здесь только карточки-список.
+
+function renderSuppliersTab() {
+  var sups = DB.suppliers || [];
+  // Единый критерий экрана: справочники ведёт роль с clients_edit
+  // (admin/operator/manager); worker экраном контрагентов не управляет.
+  var editable = can('clients_edit');
+  var rows = sups.map(function (s) {
+    var actions = '';
+    if (editable) {
+      actions = '<div class="row" style="margin-top:6px;gap:6px">' +
+        '<button class="btn" data-edit-supplier="' + escapeHtml(String(s.id)) + '" style="flex:1">✎ Редактировать</button>' +
+        '<button class="btn btn-danger" data-delete-supplier="' + escapeHtml(String(s.id)) + '" style="flex:1">🗑 Удалить</button>' +
+        '</div>';
+    }
+    return '<div class="list-item">' +
+      '<div class="spread"><b>' + escapeHtml(s.name || '—') + '</b>' +
+        (s.hours ? '<span class="badge">' + escapeHtml(s.hours) + '</span>' : '') +
+      '</div>' +
+      (s.phone ? '<div class="small">📞 <a href="tel:' + escapeHtml(s.phone) + '">' +
+        escapeHtml(s.phone) + '</a></div>' : '') +
+      (s.address ? '<div class="small muted">📍 ' + escapeHtml(s.address) + '</div>' : '') +
+      (s.note ? '<div class="small">' + escapeHtml(s.note) + '</div>' : '') +
+      actions +
+    '</div>';
+  }).join('');
+
+  return '<div class="spread">' +
+      '<h2>🚚 Поставщики</h2>' +
+      (editable ? '<button class="btn btn-primary" data-add-supplier>➕ Поставщик</button>' : '') +
+    '</div>' +
+    renderClientsTabs() +
+    '<div class="card">' +
+      (rows ? '<div class="list">' + rows + '</div>'
+            : '<p class="muted">Поставщиков пока нет.</p>') +
+    '</div>';
 }
 
 // --- 3. Карточка контрагента ---
@@ -104,7 +156,7 @@ function renderClientCard(c) {
     (can('clients_edit')
       ? '<div class="row" style="margin-top:8px;gap:6px">' +
           '<button class="btn btn-primary" data-new-order-from-client="' + c.id + '" style="flex:1">➕ Новая заявка</button>' +
-          '<button class="btn" data-import-contact style="flex:1">📥 Из телефонной книги</button>' +
+          '<button class="btn" data-import-contact style="flex:1">📥 Импорт / Вставить</button>' +
         '</div>'
       : '') +
     '<div class="card info-block">' +
@@ -302,6 +354,15 @@ document.addEventListener('click', function (ev) {
   var backBtn = sel('[data-clients-back]');
   if (backBtn) { CL_TAB = 'list'; state.clientId = null; render(); return; }
 
+  // Переключение вкладок экрана (Этап 31): список / поставщики.
+  var clTab = sel('[data-cl-tab]');
+  if (clTab) {
+    CL_TAB = clTab.getAttribute('data-cl-tab');
+    if (CL_TAB !== 'card') state.clientId = null;
+    render();
+    return;
+  }
+
   // ➕ Новая заявка из карточки контрагента (Этап 30): модалка заявки с
   // предзаполненными данными и выбранным контрагентом (привязку сделает
   // saveOrderWithClient через select #co-client-id).
@@ -413,6 +474,8 @@ document.addEventListener('click', function (ev) {
 });
 
 window.renderClients = renderClients;
+window.renderClientsTabs = renderClientsTabs;
+window.renderSuppliersTab = renderSuppliersTab;
 window.renderClientCard = renderClientCard;
 window.renderClientList = renderClientList;
 window.renderClientEditModal = renderClientEditModal;

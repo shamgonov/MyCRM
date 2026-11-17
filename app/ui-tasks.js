@@ -30,6 +30,11 @@ function normalizeTask(t) {
   else t.dueDate = String(t.dueDate);
   if (!t.id) t.id = 'tsk' + Date.now() + '_' + ((DB.tasks || []).length + 1);
   if (typeof t.by !== 'string') t.by = String(t.by || (state && state.user) || '');
+  // Этап 31: время напоминания и флаг оповещения.
+  if (!t.reminderTime) t.reminderTime = '';
+  else t.reminderTime = String(t.reminderTime);
+  if (t.notify === undefined) t.notify = false;
+  else t.notify = !!t.notify;
   return t;
 }
 
@@ -49,7 +54,9 @@ function addTask(data) {
     done: false,
     createdAt: Date.now(),
     dueDate: d.dueDate ? String(d.dueDate) : null,
-    by: (state && state.user) || ''
+    by: (state && state.user) || '',
+    reminderTime: d.reminderTime ? String(d.reminderTime) : '',
+    notify: !!d.notify
   });
   if (!Array.isArray(DB.tasks)) DB.tasks = [];
   DB.tasks.push(t);
@@ -67,6 +74,10 @@ function updateTask(id, data) {
   t.note = String(d.note == null ? t.note : d.note).trim();
   t.dueDate = d.dueDate ? String(d.dueDate) : null;
   t.orderId = d.orderId ? Number(d.orderId) : null;
+  // Этап 31: поля напоминания — обновляем только если они переданы
+  // (вызовы без них не должны сбрасывать настройку).
+  if (d.reminderTime !== undefined) t.reminderTime = d.reminderTime ? String(d.reminderTime) : '';
+  if (d.notify !== undefined) t.notify = !!d.notify;
   normalizeTask(t);
   save();
   if (typeof collectionSave === 'function') collectionSave('tasks', t);
@@ -150,6 +161,7 @@ function renderTaskRow(t) {
       (t.note ? '<div class="small muted">' + escapeHtml(t.note) + '</div>' : '') +
       '<div class="small' + (overdue ? ' badge-warn' : ' muted') + '">' +
         (t.dueDate ? (overdue ? '⚠️ просрочено: ' : '📅 ') + escapeHtml(t.dueDate) : '📅 без даты') +
+        (t.notify && t.reminderTime ? ' · 🔔 ' + escapeHtml(t.reminderTime) : '') +
         (t.by ? ' · ' + escapeHtml(t.by) : '') +
       '</div>' +
       link +
@@ -201,6 +213,12 @@ function renderTaskModal(task) {
       escapeHtml(t ? t.note : '') + '</textarea></label>' +
     '<label class="field"><span>Дата выполнения</span>' +
       '<input id="tk-due" type="date" value="' + escapeHtml(t && t.dueDate ? t.dueDate : '') + '"></label>' +
+    // Этап 31: время напоминания + оповещение.
+    '<label class="field"><span>Время напоминания</span>' +
+      '<input id="tk-time" type="time" value="' + escapeHtml(t && t.reminderTime ? t.reminderTime : '') + '"></label>' +
+    '<label class="field" style="flex-direction:row;align-items:center;gap:8px">' +
+      '<input id="tk-notify" type="checkbox"' + (t && t.notify ? ' checked' : '') + '>' +
+      '<span>🔔 Оповестить меня</span></label>' +
     '<label class="field"><span>Привязка к заявке</span>' +
       '<select id="tk-order"><option value="">— личная задача —</option>' + orderOptions + '</select></label>' +
     '<div class="row">' +
@@ -261,11 +279,15 @@ document.addEventListener('click', function (ev) {
   if (saveTaskBtn) {
     const title = val('tk-title');
     if (!title) { toast('Укажите заголовок', true); return; }
+    const notifyEl = document.getElementById('tk-notify');
     const data = {
       title: title,
       note: val('tk-note'),
       dueDate: val('tk-due'),
-      orderId: val('tk-order') ? Number(val('tk-order')) : null
+      orderId: val('tk-order') ? Number(val('tk-order')) : null,
+      // Этап 31: время напоминания + флаг оповещения (checkbox — через checked).
+      reminderTime: val('tk-time'),
+      notify: !!(notifyEl && notifyEl.checked)
     };
     const id = window.__taskEditing;
     const saved = id ? updateTask(id, data) : addTask(data);

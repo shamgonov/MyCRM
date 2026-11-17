@@ -863,6 +863,34 @@ function renderCreateOrderModal() {
   );
 }
 
+// Модалка редактирования заявки (Этап 31): клиент, телефон, адрес, дата/время.
+// Поля названы eo-*, а не nc-*, чтобы значения модалки редактирования не
+// смешивались с модалкой создания (они живут в одном document).
+function renderEditOrderModal(o) {
+  if (!o) return;
+  showModal(
+    '<h3>✎ Редактировать заявку №' + escapeHtml(orderDisplayNumber(o)) + '</h3>' +
+    '<label class="field"><span>Клиент *</span><input id="eo-client" type="text" value="' +
+      escapeHtml(o.client || '') + '"></label>' +
+    '<label class="field"><span>Телефон</span><input id="eo-phone" type="tel" value="' +
+      escapeHtml(o.phone || '') + '"></label>' +
+    '<label class="field"><span>Адрес</span><input id="eo-address" type="text" value="' +
+      escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '"></label>' +
+    '<label class="field"><span>Дата</span><input id="eo-date" type="date" value="' +
+      escapeHtml(o.date || '') + '"></label>' +
+    '<div class="row">' +
+      '<label class="field" style="flex:1"><span>Время с</span><input id="eo-t1" type="time" value="' +
+        escapeHtml(o.t1 || '') + '"></label>' +
+      '<label class="field" style="flex:1"><span>Время до</span><input id="eo-t2" type="time" value="' +
+        escapeHtml(o.t2 || '') + '"></label>' +
+    '</div>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-save-edit-order="' + o.id + '" style="flex:1">Сохранить</button>' +
+    '</div>'
+  );
+}
+
 // --- Делегирование событий этого модуля ---
 
 document.addEventListener('click', function (ev) {
@@ -1076,7 +1104,42 @@ document.addEventListener('click', function (ev) {
   if (addWork) { alert('Добавление работ — этап 5'); return; }
 
   const editBtn = sel('[data-edit-order]');
-  if (editBtn) { toast('Редактирование заявки — этап 5'); return; }
+  if (editBtn) {
+    const eo = findOrderById(Number(editBtn.getAttribute('data-edit-order')));
+    if (eo && canEditOrder(eo)) renderEditOrderModal(eo);
+    else if (eo) toast('Нет права редактировать заявку', true);
+    return;
+  }
+
+  // Сохранение правок из модалки «Редактировать заявку» (Этап 31).
+  const saveEditBtn = sel('[data-save-edit-order]');
+  if (saveEditBtn) {
+    const oid = Number(saveEditBtn.getAttribute('data-save-edit-order'));
+    const o = findOrderById(oid);
+    if (!o) { closeModal(); return; }
+    if (!canEditOrder(o)) { toast('Нет права редактировать заявку', true); return; }
+    const eval_ = function (id) {
+      const el = document.getElementById(id);
+      return el ? String(el.value == null ? '' : el.value).trim() : '';
+    };
+    const newClient = eval_('eo-client');
+    if (!newClient) { toast('Укажите клиента', true); return; }
+    o.client = newClient;
+    o.phone = eval_('eo-phone');
+    o.address = eval_('eo-address');
+    o.date = eval_('eo-date') || o.date;
+    o.t1 = eval_('eo-t1');
+    o.t2 = eval_('eo-t2');
+    o.history.push({
+      ts: Date.now(), by: state.user, action: 'edit',
+      details: 'Данные заявки обновлены'
+    });
+    saveOrderLocal(o);
+    closeModal();
+    toast('Заявка обновлена');
+    render();
+    return;
+  }
 
   const saveBtn = sel('[data-save-order]');
   if (saveBtn) {

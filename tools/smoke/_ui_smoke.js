@@ -12,15 +12,17 @@ globalThis.localStorage = (function () {
 const appStub = { innerHTML: '' };
 const navStub = { innerHTML: '' };
 const modalStub = { innerHTML: '' };
+const FIELDS = {};
+const clickHandlers = [];
 globalThis.document = {
   readyState: 'loading', // чтобы boot пошёл через DOMContentLoaded-ветку
   getElementById: function (id) {
     if (id === 'app') return appStub;
     if (id === 'nav') return navStub;
     if (id === 'modal-container') return modalStub;
-    return null;
+    return Object.prototype.hasOwnProperty.call(FIELDS, id) ? FIELDS[id] : null;
   },
-  addEventListener: function () {}
+  addEventListener: function (type, fn) { if (type === 'click') clickHandlers.push(fn); }
 };
 globalThis.confirm = function () { return false; };
 globalThis.alert = function () {};
@@ -120,6 +122,48 @@ assert(cardHtml.indexOf('data-edit-order') >= 0, 'worker видит ✎ на с�
 const doneOrder = DB.orders.find(function (o) { return o.status === 'completed'; });
 const doneCard = renderOrderCard(doneOrder.id);
 assert(doneCard.indexOf('data-edit-order') < 0, 'worker НЕ видит ✎ на completed');
+
+// --- Этап 31: ✎ открывает модалку редактирования и сохраняет правки ---
+function clickOn(attr, value) {
+  const node = {
+    value: value === undefined || value === null ? '' : String(value),
+    getAttribute: function (n) { return n === attr ? String(value) : null; },
+    closest: function (selector) { return selector === '[' + attr + ']' ? node : null; }
+  };
+  clickHandlers.forEach(function (fn) { fn({ target: node }); });
+}
+
+modalStub.innerHTML = '';
+clickOn('data-edit-order', myOrder.id);
+assert(modalStub.innerHTML.indexOf('Редактировать заявку') >= 0,
+  'Э31: ✎ открыла модалку редактирования');
+assert(modalStub.innerHTML.indexOf('eo-client') >= 0, 'Э31: модалка — поле клиента');
+assert(modalStub.innerHTML.indexOf('eo-date') >= 0, 'Э31: модалка — поле даты');
+assert(modalStub.innerHTML.indexOf('value="' + escapeHtml(myOrder.client) + '"') >= 0,
+  'Э31: модалка предзаполнена текущим клиентом');
+assert(modalStub.innerHTML.indexOf('onclick') < 0, 'Э31: инлайн-обработчиков нет');
+
+FIELDS['eo-client'] = { value: 'Новый Клиент Э31' };
+FIELDS['eo-phone'] = { value: '+79990009900' };
+FIELDS['eo-address'] = { value: 'Строителей, 7' };
+FIELDS['eo-date'] = { value: '2027-03-01' };
+FIELDS['eo-t1'] = { value: '13:00' };
+FIELDS['eo-t2'] = { value: '16:00' };
+const clientBefore = myOrder.client;
+clickOn('data-save-edit-order', myOrder.id);
+assert.eq(myOrder.client, 'Новый Клиент Э31', 'Э31: клиент обновлён');
+assert.eq(myOrder.phone, '+79990009900', 'Э31: телефон обновлён');
+assert.eq(myOrder.date, '2027-03-01', 'Э31: дата обновлена');
+assert.eq(myOrder.t1, '13:00', 'Э31: время с обновлено');
+assert(myOrder.history.some(function (h) { return h.action === 'edit'; }),
+  'Э31: правка записана в историю');
+assert.eq(modalStub.innerHTML, '', 'Э31: модалка закрыта после сохранения');
+assert(clientBefore !== myOrder.client, 'Э31: значение реально изменилось');
+
+// Пустой клиент — сохранение отклонено, данные не испорчены.
+FIELDS['eo-client'] = { value: '' };
+clickOn('data-save-edit-order', myOrder.id);
+assert.eq(myOrder.client, 'Новый Клиент Э31', 'Э31: пустой клиент — не перезаписал');
 
 // --- вкладка «Смета»
 ORD_TAB = 'estimate';

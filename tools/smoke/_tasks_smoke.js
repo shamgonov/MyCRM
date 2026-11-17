@@ -13,6 +13,7 @@ globalThis.localStorage = (function () {
 var appStub = { innerHTML: '' };
 var navStub = { innerHTML: '' };
 var modalStub = { innerHTML: '' };
+var FIELDS = {};
 var clickHandlers = [];
 globalThis.document = {
   readyState: 'loading',
@@ -20,7 +21,7 @@ globalThis.document = {
     if (id === 'app') return appStub;
     if (id === 'nav') return navStub;
     if (id === 'modal-container') return modalStub;
-    return null;
+    return Object.prototype.hasOwnProperty.call(FIELDS, id) ? FIELDS[id] : null;
   },
   addEventListener: function (type, fn) { if (type === 'click') clickHandlers.push(fn); }
 };
@@ -189,8 +190,75 @@ clickHandlers.forEach(function (fn) {
 });
 assert.eq(TASK_FILTER, 'today', 'delegate: filter Today');
 
-// --- 12. typeof-регрессии (модуль может не загрузиться) ---
-assert(typeof renderTasks === 'function', 'typeof renderTasks');
+// --- 11.5 Этап 31: reminderTime + notify ---
+
+// normalizeTask доводит новые поля до безопасных значений.
+var nt = normalizeTask({ title: 'x' });
+assert.eq(nt.reminderTime, '', 'Э31: normalizeTask → reminderTime = ""');
+assert.eq(nt.notify, false, 'Э31: normalizeTask → notify = false');
+
+// addTask сохраняет переданные поля напоминания.
+var tRem = addTask({ title: 'Напомнить', dueDate: '2026-05-05',
+  reminderTime: '14:30', notify: true });
+assert.eq(tRem.reminderTime, '14:30', 'Э31: addTask → reminderTime');
+assert.eq(tRem.notify, true, 'Э31: addTask → notify=true');
+
+// renderTaskRow показывает 🔔 и время только при notify && reminderTime.
+var rowHtml = renderTaskRow(tRem);
+assert(rowHtml.indexOf('🔔') >= 0, 'Э31: строка — иконка 🔔');
+assert(rowHtml.indexOf('14:30') >= 0, 'Э31: строка — время напоминания');
+var rowPlain = renderTaskRow(addTask({ title: 'Без напоминания' }));
+assert(rowPlain.indexOf('🔔') < 0, 'Э31: без notify — нет 🔔');
+// notify есть, времени нет — иконку не показываем (нечего показывать).
+var rowNoTime = renderTaskRow(addTask({ title: 'Время пусто', notify: true }));
+assert(rowNoTime.indexOf('🔔') < 0, 'Э31: notify без времени — нет 🔔');
+
+// Модалка содержит новые поля.
+renderTaskModal(tRem);
+assert(modalStub.innerHTML.indexOf('tk-time') >= 0, 'Э31: модалка — tk-time');
+assert(modalStub.innerHTML.indexOf('tk-notify') >= 0, 'Э31: модалка — tk-notify');
+assert(modalStub.innerHTML.indexOf('Оповестить меня') >= 0, 'Э31: модалка — подпись чекбокса');
+assert(modalStub.innerHTML.indexOf('value="14:30"') >= 0, 'Э31: tk-time предзаполнен');
+assert(modalStub.innerHTML.indexOf('checked') >= 0, 'Э31: чекбокс отмечен у notify-задачи');
+modalStub.innerHTML = '';
+
+// Делегат «Сохранить»: читает tk-time и tk-notify.checked.
+function clickTaskSave() {
+  var node = {
+    getAttribute: function (a) { return a === 'data-save-task' ? '' : null; },
+    closest: function (s) { return s === '[data-save-task]' ? node : null; }
+  };
+  clickHandlers.forEach(function (fn) { fn({ target: node }); });
+}
+DB.tasks = [];
+window.__taskEditing = null;
+FIELDS['tk-title'] = { value: 'Позвонить поставщику' };
+FIELDS['tk-note'] = { value: '' };
+FIELDS['tk-due'] = { value: '2026-05-06' };
+FIELDS['tk-order'] = { value: '' };
+FIELDS['tk-time'] = { value: '09:15' };
+FIELDS['tk-notify'] = { checked: true };
+clickTaskSave();
+assert.eq(DB.tasks.length, 1, 'Э31: делегат создал задачу');
+assert.eq(DB.tasks[0].reminderTime, '09:15', 'Э31: делегат сохранил reminderTime');
+assert.eq(DB.tasks[0].notify, true, 'Э31: делегат сохранил notify');
+
+// Редактирование: сброс notify через снятый чекбокс.
+window.__taskEditing = String(DB.tasks[0].id);
+FIELDS['tk-notify'] = { checked: false };
+FIELDS['tk-time'] = { value: '' };
+clickTaskSave();
+assert.eq(DB.tasks[0].notify, false, 'Э31: редактирование — notify сброшен');
+assert.eq(DB.tasks[0].reminderTime, '', 'Э31: редактирование — время очищено');
+window.__taskEditing = null;
+
+// updateTask без новых полей их НЕ трогает (обратная совместимость).
+var keep = addTask({ title: 'Держи', reminderTime: '18:00', notify: true });
+updateTask(keep.id, { title: 'Держи 2' });
+assert.eq(keep.reminderTime, '18:00', 'Э31: updateTask без полей — время сохранено');
+assert.eq(keep.notify, true, 'Э31: updateTask без полей — notify сохранён');
+
+// --- 12. typeof-регрессии (модуль может не загрузиться) ---assert(typeof renderTasks === 'function', 'typeof renderTasks');
 assert(typeof renderTaskModal === 'function', 'typeof renderTaskModal');
 assert(typeof renderOrderTasksBlock === 'function', 'typeof renderOrderTasksBlock');
 assert(typeof addTask === 'function', 'typeof addTask');

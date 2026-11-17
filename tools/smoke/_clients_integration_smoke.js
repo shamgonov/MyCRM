@@ -250,7 +250,76 @@ assert(noThrow2, '7: без navigator — importFromPhone не падает');
 assert(modalStub.innerHTML.indexOf('pc-text') >= 0, '7: открыт фолбэк');
 globalThis.navigator = {};
 
-// --- 8. Журнал карточки: клик data-order → go('order', id) ---
+// --- 9. Этап 31: вкладки экрана + вкладка «🚚 Поставщики» ---
+
+loadModule('app/ui-admin.js'); // модалка поставщика и её делегаты
+
+// 9.1 Вкладки экрана рендерятся в списке контрагентов.
+CL_TAB = 'list';
+var listHtml9 = renderClients();
+assert(listHtml9.indexOf('data-cl-tab="list"') >= 0, '9.1: вкладка «Контрагенты»');
+assert(listHtml9.indexOf('data-cl-tab="suppliers"') >= 0, '9.1: вкладка «Поставщики»');
+
+// 9.2 Клик по вкладке переключает CL_TAB и рисует поставщиков.
+clickOn('data-cl-tab', 'suppliers');
+assert.eq(CL_TAB, 'suppliers', '9.2: клик по вкладке переключил CL_TAB');
+var supHtml = renderClients();
+assert(supHtml.indexOf('Поставщики') >= 0, '9.2: экран поставщиков отрисован');
+assert(supHtml.indexOf('data-add-supplier') >= 0, '9.2: кнопка «➕ Поставщик»');
+
+// 9.3 Кнопка импорта переименована (Этап 31).
+var cardImp = renderClientCard(mkClient({ id: 777, name: 'ИмпортТест' }));
+assert(cardImp.indexOf('📥 Импорт / Вставить') >= 0, '9.3: подпись «📥 Импорт / Вставить»');
+assert(cardImp.indexOf('data-import-contact') >= 0, '9.3: data-import-contact на месте');
+
+// 9.4 Полный цикл создания поставщика через модалку ui-admin.js.
+DB.suppliers = [];
+modalStub.innerHTML = '';
+clickOn('data-add-supplier');
+assert(modalStub.innerHTML.indexOf('sp-name') >= 0, '9.4: открыта модалка поставщика');
+FIELDS['sp-name'] = { value: 'МеталлБаза' };
+FIELDS['sp-phone'] = { value: '+73430001122' };
+FIELDS['sp-address'] = { value: 'Черметов, 1' };
+FIELDS['sp-hours'] = { value: 'пн-пт 8-17' };
+FIELDS['sp-note'] = { value: 'заказ за сутки' };
+clickOn('data-save-supplier');
+assert.eq((DB.suppliers || []).length, 1, '9.4: поставщик создан');
+var sup1 = DB.suppliers[0];
+assert.eq(sup1.name, 'МеталлБаза', '9.4: название сохранено');
+assert.eq(sup1.hours, 'пн-пт 8-17', '9.4: часы работы сохранены');
+assert.eq(modalStub.innerHTML, '', '9.4: модалка закрыта');
+
+// 9.5 Вкладка показывает карточку поставщика с кнопками.
+var supHtml2 = renderSuppliersTab();
+assert(supHtml2.indexOf('МеталлБаза') >= 0, '9.5: поставщик в списке');
+assert(supHtml2.indexOf('data-edit-supplier="' + sup1.id + '"') >= 0, '9.5: кнопка ✎');
+assert(supHtml2.indexOf('data-delete-supplier="' + sup1.id + '"') >= 0, '9.5: кнопка 🗑');
+assert(supHtml2.indexOf('пн-пт 8-17') >= 0, '9.5: часы работы показаны');
+
+// 9.6 Редактирование через ✎ → модалка предзаполнена → сохранение.
+modalStub.innerHTML = '';
+clickOn('data-edit-supplier', sup1.id);
+assert(modalStub.innerHTML.indexOf('value="МеталлБаза"') >= 0, '9.6: модалка предзаполнена');
+FIELDS['sp-name'] = { value: 'МеталлБаза ООО' };
+clickOn('data-save-supplier');
+assert.eq(DB.suppliers.length, 1, '9.6: дубль не создан');
+assert.eq(DB.suppliers[0].name, 'МеталлБаза ООО', '9.6: название обновлено');
+
+// 9.7 Удаление.
+clickOn('data-delete-supplier', sup1.id);
+assert.eq(DB.suppliers.length, 0, '9.7: поставщик удалён');
+
+// 9.8 Worker без clients_edit — вкладка есть, кнопок нет.
+login('worker', 'Мастер');
+var supWorker = renderSuppliersTab();
+assert(supWorker.indexOf('data-add-supplier') < 0, '9.8: worker — нет кнопки добавления');
+var listWorker9 = renderClientList();
+assert(listWorker9.indexOf('data-new-client') < 0, '9.8: worker — нет «＋ Контрагент»');
+assert(listWorker9.indexOf('data-cl-tab="suppliers"') >= 0, '9.8: вкладка поставщика видна');
+login('admin', 'Владелец');
+CL_TAB = 'list';
+
+// --- 10. Журнал карточки: клик data-order → go('order', id) ---
 
 DB.orders.push(mkOrder({ id: 950, client: c3.name, date: '2026-08-01' }));
 c3.orderIds.push(950);
