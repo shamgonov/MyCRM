@@ -109,6 +109,8 @@ assert(cardHtml.indexOf('Заявка №' + myOrder.id) >= 0, 'карточка
 assert(cardHtml.indexOf('data-tab="main"') >= 0 && cardHtml.indexOf('data-tab="estimate"') >= 0 &&
   cardHtml.indexOf('data-tab="materials"') >= 0 && cardHtml.indexOf('data-tab="journal"') >= 0,
   'карточка: 4 таба');
+// Этап 29: вкладки обёрнуты в скролл-контейнер (order-tabs-scroll).
+assert(cardHtml.indexOf('order-tabs-scroll') >= 0, 'карточка: вкладки в order-tabs-scroll');
 assert(cardHtml.indexOf('tel:') >= 0, 'карточка: телефон ссылкой tel:');
 assert(cardHtml.indexOf('Исполнители') >= 0, 'карточка: блок исполнителей');
 assert(cardHtml.indexOf('data-back') >= 0, 'карточка: кнопка «Назад»');

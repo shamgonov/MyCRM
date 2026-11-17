@@ -373,3 +373,20 @@ input:focus, select:focus, textarea:focus {
   50% { opacity: 0.7; }
   100% { opacity: 1; }
 }
+
+/* --- Горизонтальный скролл вкладок карточки заявки (Этап 29) ---
+   Дополняет .tabs (Этап 29-fix): тот же контейнер, скроллбар скрыт,
+   добавлен scroll-snap. .tab-btn внутри не сжимается. */
+.order-tabs-scroll {
+  scroll-snap-type: x proximity;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.order-tabs-scroll::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
+}
+.order-tabs-scroll .tab-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  scroll-snap-align: start;
+}

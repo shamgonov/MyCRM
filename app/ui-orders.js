@@ -288,7 +288,7 @@ function renderOrderCard(id) {
       (typeof renderCalcButton === 'function' ? renderCalcButton() : '') +
       (canEditOrder(o) ? '<button class="btn" data-edit-order="' + o.id + '" title="Редактировать">✎</button>' : '') +
     '</div>' +
-    '<div class="tabs">' + tabs + '</div>' +
+    '<div class="tabs order-tabs-scroll">' + tabs + '</div>' +
     body;
 }
 

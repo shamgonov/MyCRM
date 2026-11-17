@@ -84,6 +84,19 @@ var tabBtnRule = ruleBody('\\.tab-btn(?![\\w-])');
 assert(tabBtnRule.indexOf('flex: 0 0 auto') >= 0, '3.1: .tab-btn не сжимается');
 assert(tabBtnRule.indexOf('white-space: nowrap') >= 0, '3.1: .tab-btn → nowrap');
 
+// --- 3.2 Этап 29: .order-tabs-scroll — скрытый скроллбар + snap ---
+
+var otsRule = ruleBody('\\.order-tabs-scroll(?![\\w-:])');
+assert(otsRule.indexOf('scroll-snap-type: x proximity') >= 0,
+  '3.2: .order-tabs-scroll → scroll-snap-type');
+assert(otsRule.indexOf('scrollbar-width: none') >= 0,
+  '3.2: .order-tabs-scroll → скроллбар скрыт (Firefox)');
+assert(css.indexOf('.order-tabs-scroll::-webkit-scrollbar') >= 0,
+  '3.2: .order-tabs-scroll::-webkit-scrollbar → display: none');
+var otsBtn = ruleBody('\\.order-tabs-scroll \\.tab-btn(?![\\w-])');
+assert(otsBtn.indexOf('flex: 0 0 auto') >= 0, '3.2: вкладки не сжимаются');
+assert(otsBtn.indexOf('scroll-snap-align: start') >= 0, '3.2: snap к началу вкладки');
+
 // --- 4. Нижняя навигация ---
 
 var navScroll = ruleBody('\\.nav-scroll');
