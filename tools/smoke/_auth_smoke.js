@@ -96,6 +96,7 @@ assert(adminLike() === true, 'adminLike: state.role=admin');
 login('worker', 'Фёдор');
 assert.eq(state.role, 'worker', 'login задаёт роль');
 assert.eq(state.user, 'Фёдор', 'login задаёт имя');
+assert.eq(state.uid, null, 'login без uid → state.uid = null (мок-режим)');
 assert.eq(state.screen, 'tasks', 'login worker → экран tasks');
 login('operator', 'Мария');
 assert.eq(state.screen, 'orders', 'login operator → экран orders');
@@ -103,6 +104,56 @@ logout();
 assert.eq(state.role, null, 'logout сбрасывает роль');
 assert.eq(state.user, null, 'logout сбрасывает имя');
 assert.eq(state.screen, 'login', 'logout возвращает на экран входа');
+
+// --- Этап 14-A: uid-ключ, userRecord, Phone Auth без SDK (мок-ветка) ---
+
+// login принимает третий аргумент — uid Firebase Auth.
+login('manager', 'Анна', 'uid-abc');
+assert.eq(state.uid, 'uid-abc', 'login с uid → state.uid сохранён');
+logout();
+assert.eq(state.uid, null, 'logout сбрасывает state.uid');
+
+// userRecord(): приоритет uid над deviceId.
+setOwnerFlag(false);
+DB.users = [
+  { id: 'dev-worker', uid: '', deviceId: 'other-dev', name: 'Мастер', role: 'worker' },
+  { id: 'u-1', uid: 'uid-abc', deviceId: '', name: 'Анна', role: 'manager' }
+];
+state.uid = 'uid-abc';
+assert.eq(userRecord().name, 'Анна', 'userRecord: находит по uid');
+state.uid = 'no-such-uid';
+assert.eq(userRecord(), null, 'userRecord: неизвестный uid и нет deviceId-записи → null');
+state.uid = null;
+assert.eq(userRecord(), null, 'userRecord: без uid пусто (deviceId другого устройства)');
+
+// myPerms/effectiveRole идут за uid-записью.
+state.uid = 'uid-abc';
+state.role = 'worker';
+assert(myPerms().indexOf('order_assign') >= 0, 'myPerms: права из uid-записи (manager)');
+assert.eq(effectiveRole(), 'manager', 'effectiveRole: uid-запись (manager)');
+state.uid = null;
+
+// Phone Auth без SDK: недоступен, функции не падают (мок-фолбэк).
+assert.eq(authPhoneAvailable(), false, 'authPhoneAvailable: без SDK → false');
+assert.eq(requestPhoneOtp('+79000000000'), false, 'requestPhoneOtp: без SDK → false');
+assert.eq(confirmPhoneOtp('123456'), false, 'confirmPhoneOtp: без подтверждения → false');
+assert.eq(isOtpSent(), false, 'isOtpSent: по умолчанию false');
+
+// applyAuthedUser(): запись по uid → её роль/имя; нет записи → worker-гость.
+state.uid = null;
+DB.users = [{ id: 'u-1', uid: 'uid-abc', name: 'Анна', role: 'manager' }];
+assert.eq(applyAuthedUser({ uid: 'uid-abc', phoneNumber: '+79001112233' }), true,
+  'applyAuthedUser: uid найден');
+assert.eq(state.uid, 'uid-abc', 'applyAuthedUser: state.uid сохранён');
+assert.eq(state.user, 'Анна', 'applyAuthedUser: state.user из users/{uid}');
+assert.eq(state.role, 'manager', 'applyAuthedUser: роль из записи');
+assert.eq(applyAuthedUser({ uid: 'ghost', phoneNumber: '+79005554433' }), true,
+  'applyAuthedUser: неизвестный uid → вход гостем');
+assert.eq(state.role, 'worker', 'applyAuthedUser: гость → worker');
+assert.eq(state.user, '+79005554433', 'applyAuthedUser: гость → имя из телефона');
+assert.eq(applyAuthedUser(null), false, 'applyAuthedUser(null) → false');
+logout();
+DB.users = [];
 
 // --- PIN
 assert(savePinLocal('1234') === true, 'PIN 4 цифры принимается');

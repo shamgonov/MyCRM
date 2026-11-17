@@ -1,5 +1,8 @@
 /* CRM2 :: app/auth.js — deviceId, роли, права can(), PIN (локальный, Этап 1).
-   Зависит от db.js (lsGet/lsSet, DB). Firestore-роли подключаются на Этапе 2. */
+   Этап 14-A: реальный вход по телефону через Firebase Phone Auth (compat).
+   Если firebase.auth() недоступен (офлайн, смоуки, SDK не загрузился) —
+   молча остаётся мок-вход doLogin() из core.js.
+   Зависит от db.js (lsGet/lsSet, DB). */
 'use strict';
 
 // --- deviceId ---
@@ -91,11 +94,23 @@ function unionPermsFor(roleIds) {
   return Object.keys(set);
 }
 
+// userRecord(): запись сотрудника в DB.users. Этап 14-A: при авторизованном
+// state.uid ищем по uid (документ users/{uid} в Firestore), иначе — по deviceId
+// (локальный/мок-режим). deviceId остаётся полем записи.
+function userRecord() {
+  if (typeof DB === 'undefined' || !DB || !DB.users) return null;
+  const uid = (typeof state !== 'undefined' && state && state.uid) || null;
+  if (uid) {
+    const byUid = DB.users.find(function (u) { return u.uid === uid || u.id === uid; });
+    if (byUid) return byUid;
+  }
+  return DB.users.find(function (u) { return u.id === deviceId(); }) || null;
+}
+
 function myPerms() {
   // simOn (режим симуляции) гасит права владельца-устройства: смотрим как роль.
   if (isOwner() && !isSim()) return ['all'];
-  const me = (typeof DB !== 'undefined' && DB) ? (DB.users || []).find((u) => u.id === deviceId()) : null;
-  return unionPermsFor(rolesOf(me || { role: state.role }));
+  return unionPermsFor(rolesOf(userRecord() || { role: state.role }));
 }
 
 function can(p) {
@@ -120,9 +135,7 @@ function uiOwner() {
 const ROLE_RANK = ['admin', 'manager', 'operator', 'worker'];
 
 function effectiveRole() {
-  const roles = rolesOf((typeof DB !== 'undefined' && DB)
-    ? (DB.users || []).find((u) => u.id === deviceId())
-    : null);
+  const roles = rolesOf(userRecord());
   const pool = roles.length ? roles : [state.role];
   for (const r of ROLE_RANK) {
     if (pool.indexOf(r) >= 0) return r;
@@ -132,20 +145,97 @@ function effectiveRole() {
 
 // --- Вход/выход (мок, Этап 1; телефон+код — с Firebase на Этапе 2) ---
 
-function login(role, name) {
+function login(role, name, uid) {
   state.role = role;
   state.user = name;
+  state.uid = uid || null; // Этап 14-A: uid Firebase Auth (null в мок-режиме)
   state.screen = (role === 'worker') ? 'tasks' : 'orders';
   state.navHistory = [];
 }
 
 function logout() {
+  // Реальный вход: выходим и из Firebase (если SDK доступен).
+  if (state.uid && typeof firebase !== 'undefined' && firebase.auth) {
+    try { firebase.auth().signOut(); } catch (e) { /* офлайн — локальный выход важнее */ }
+  }
   state.role = null;
   state.user = null;
+  state.uid = null;
   state.screen = 'login';
   state.orderId = null;
   state.filter = 'all';
   state.navHistory = [];
+}
+
+// --- Этап 14-A: Firebase Phone Auth (compat) ---
+
+// authPhoneAvailable(): доступен ли реальный вход по SMS.
+// Нужны SDK, метод signInWithPhoneNumber и контейнер reCAPTCHA на странице.
+function authPhoneAvailable() {
+  return typeof firebase !== 'undefined' && !!firebase && !!firebase.auth &&
+    typeof firebase.auth().signInWithPhoneNumber === 'function';
+}
+
+var AUTH_CONFIRMATION = null; // результат signInWithPhoneNumber (для confirm)
+
+// applyAuthedUser(user): по uid находит запись сотрудника (DB.users, куда
+// sync/админка кладут users/{uid}) и входит; записи нет — worker-гость.
+function applyAuthedUser(user) {
+  const uid = user && user.uid ? String(user.uid) : '';
+  if (!uid) return false;
+  let rec = (typeof DB !== 'undefined' && DB && DB.users)
+    ? DB.users.find(function (u) { return u.uid === uid || u.id === uid; })
+    : null;
+  if (rec) {
+    login(effectiveRoleFor(rec), rec.name || user.phoneNumber || uid, uid);
+  } else {
+    login('worker', user.phoneNumber || 'Сотрудник', uid);
+  }
+  return true;
+}
+
+// effectiveRoleFor(rec): старшая роль записи (без зависимости от state).
+function effectiveRoleFor(rec) {
+  const roles = rolesOf(rec);
+  for (const r of ROLE_RANK) {
+    if (roles.indexOf(r) >= 0) return r;
+  }
+  return roles[0] || 'worker';
+}
+
+// isOtpSent(): SMS-код запрошен, ждём подтверждения (второй клик «Войти»).
+function isOtpSent() { return !!AUTH_CONFIRMATION; }
+
+// requestPhoneOtp(phone): отправка SMS-кода. true — код отправлен;
+// false — недоступен (звонящий должен уйти на мок-вход); строка — ошибка.
+function requestPhoneOtp(phone) {
+  if (!authPhoneAvailable()) return false;
+  const appVerifier = new firebase.auth.RecaptchaVerifier('recaptcha-container', {
+    size: 'invisible'
+  });
+  return firebase.auth().signInWithPhoneNumber(String(phone), appVerifier)
+    .then(function (confirmation) {
+      AUTH_CONFIRMATION = confirmation;
+      return true;
+    })
+    .catch(function (e) {
+      AUTH_CONFIRMATION = null;
+      return (e && e.message) ? String(e.message) : 'Ошибка отправки кода';
+    });
+}
+
+// confirmPhoneOtp(code): проверка SMS-кода. true — вход выполнен;
+// false — подтверждения нет (мок-ветка); строка — ошибка.
+function confirmPhoneOtp(code) {
+  if (!AUTH_CONFIRMATION) return false;
+  return AUTH_CONFIRMATION.confirm(String(code))
+    .then(function (user) {
+      AUTH_CONFIRMATION = null;
+      return applyAuthedUser(user) ? true : 'Пользователь не определён';
+    })
+    .catch(function (e) {
+      return (e && e.message) ? String(e.message) : 'Неверный код';
+    });
 }
 
 // --- PIN (локальная заглушка; PBKDF2 отложим) ---

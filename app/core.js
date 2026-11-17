@@ -7,6 +7,7 @@
 var state = {
   role: null,        // 'admin'|'operator'|'manager'|'worker' (мок-вход, Этап 1)
   user: null,        // имя пользователя
+  uid: null,         // Firebase Auth uid (Этап 14-A; null в мок-режиме)
   screen: 'login',   // текущий экран
   orderId: null,     // открытая заявка
   filter: 'all',     // фильтр списка заявок
@@ -136,7 +137,13 @@ function renderLogin() {
     '<label class="field"><span>Код из SMS</span>' +
     '<input id="login-code" type="text" inputmode="numeric" placeholder="0000"></label>' +
     '<button class="btn btn-primary btn-block" data-login>Войти</button>' +
-    '<p class="small muted">Этап 1: вход моковый, любые телефон и код.</p>' +
+    // Контейнер reCAPTCHA для signInWithPhoneNumber (невидимый режим).
+    '<div id="recaptcha-container"></div>' +
+    '<p class="small muted">' +
+      (typeof authPhoneAvailable === 'function' && authPhoneAvailable()
+        ? 'Нажмите «Войти» — пришлём код по SMS.'
+        : 'Офлайн-режим: любые телефон и код (4+ знаков).') +
+    '</p>' +
     '</div>';
 }
 
@@ -255,8 +262,33 @@ document.addEventListener('click', function (ev) {
   if (loginBtn) {
     const phone = (document.getElementById('login-phone') || {}).value || '';
     const code = (document.getElementById('login-code') || {}).value || '';
-    if (doLogin(phone, code)) { render(); }
-    else { toast('Введите телефон и код (4+ цифр)', true); }
+    // Мок-вход: любой телефон и код (4+ знаков). Общий финал двух веток ниже.
+    const mockLogin = function () {
+      if (doLogin(phone, code)) { render(); }
+      else { toast('Введите телефон и код (4+ цифр)', true); }
+    };
+    // Результат Phone Auth — Promise (реальный вход) или false (SDK/сессии нет).
+    const settle = function (res, onSent) {
+      if (res === false) { mockLogin(); return; }       // фолбэк на мок-вход
+      if (res && typeof res.then === 'function') {
+        res.then(function (v) {
+          if (v === true) { if (onSent) { onSent(); } else { render(); } }
+          else { toast(String(v === false ? 'Повторите вход' : v), true); }
+        }, function (e) { toast(String(e), true); });
+        return;
+      }
+      toast(String(res), true);
+    };
+    // Второй шаг: код уже запрошен — подтверждаем его.
+    if (typeof isOtpSent === 'function' && isOtpSent()) {
+      if (!code) { toast('Введите код из SMS', true); return; }
+      settle(confirmPhoneOtp(code), null);
+      return;
+    }
+    // Первый шаг: просим SMS-код; без SDK settle() уведёт на мок-вход.
+    if (!phone) { toast('Введите телефон', true); return; }
+    settle(typeof requestPhoneOtp === 'function' ? requestPhoneOtp(phone) : false,
+      function () { toast('Код отправлен по SMS'); render(); });
     return;
   }
 

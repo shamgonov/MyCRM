@@ -230,10 +230,11 @@ function load() {
   // По умолчанию — 2 сотрудника (Этап 11), иначе админка пуста и роли менять некому.
   // id синтетические: запись с id === deviceId() дала бы любому устройству
   // права из DB.users в обход роли, заданной при входе (auth.myPerms).
+  // Этап 14-A: uid — документ users/{uid} из Firestore, deviceId — поле устройства.
   if (!(DB.users && DB.users.length)) {
     DB.users = [
-      { id: 'dev-owner', name: 'Владелец', role: 'admin' },
-      { id: 'dev-worker', name: 'Мастер', role: 'worker' }
+      { id: 'dev-owner', uid: '', deviceId: '', name: 'Владелец', role: 'admin' },
+      { id: 'dev-worker', uid: '', deviceId: '', name: 'Мастер', role: 'worker' }
     ];
   }
   return DB;
