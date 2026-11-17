@@ -321,3 +321,15 @@ input:focus, select:focus, textarea:focus {
 }
 #toast.show { display: block; }
 #toast.error { border-left-color: var(--danger); }
+
+/* --- Свёрнутые/развёрнутые карточки заявок (Этап 28) --- */
+.order-card-collapsed {
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.order-card-collapsed:hover {
+  background: var(--bg-elev);
+}
+.order-card-expanded {
+  border-left: 3px solid var(--accent);
+}

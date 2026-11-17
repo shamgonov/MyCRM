@@ -53,6 +53,10 @@ function allOrderTags() {
   return out;
 }
 
+// --- 0. Свёрнутый/развёрнутый вид карточек (Этап 28) ---
+
+var EXPANDED_ORDERS = {}; // { [id]: true } — развёрнутые карточки
+
 // --- 1. Список заявок ---
 
 function renderOrdersList() {
@@ -99,26 +103,68 @@ function renderOrdersList() {
     '<div class="list">' + cards + '</div>';
 }
 
-// Карточка заявки в списке.
+// Карточка заявки в списке: свёрнута по умолчанию, разворачивается по клику.
 function renderOrderListItem(o) {
+  if (EXPANDED_ORDERS[o.id]) return renderOrderListItemExpanded(o);
+  return renderOrderListItemCollapsed(o);
+}
+
+// Свёрнутый обзор: клиент, дата/время, статус, исполнитель, бейджи, кнопка «Взять».
+function renderOrderListItemCollapsed(o) {
   const mine = isAssignedToMe(o);
   const pending = isMyPendingConfirm(o);
-  return '<div class="list-item' + (mine ? ' mine' : '') + '" data-order="' + o.id + '">' +
+  const badges = (typeof renderOrderBadges === 'function') ? renderOrderBadges(o) : '';
+  const worker = o.worker ? escapeHtml(o.worker) : '<span class="muted">не назначен</span>';
+  var extra = '';
+  if (pending) {
+    extra += '<span class="badge badge-warn">❓ Подтвердить</span> ';
+  }
+  if (mine) {
+    extra += '<span class="badge badge-accent">👷 МОЯ</span> ';
+  }
+  if (showTakeBtn(o)) {
+    extra += takeButton(o);
+  }
+  return '<div class="list-item' + (mine ? ' mine' : '') + ' order-card-collapsed' +
+    '" data-order="' + o.id + '" data-expand-order="' + o.id + '">' +
     '<div class="spread">' +
-      '<b>№' + o.id + ' ' + escapeHtml(o.client) + '</b>' +
-      '<span>' +
-        (pending ? '<span class="badge badge-warn">❓ Подтвердить</span> ' : '') +
-        (mine ? '<span class="badge badge-accent">👷 МОЯ</span> ' : '') +
+      '<b>№' + escapeHtml(orderDisplayNumber(o)) + ' ' + escapeHtml(o.client || '—') + '</b>' +
+      '<span>' + extra +
         '<span class="' + statusBadgeClass(o.status) + '">' +
-          (STATUS_LABELS[o.status] || o.status) + '</span>' +
+          escapeHtml(STATUS_LABELS[o.status] || o.status) + '</span>' +
       '</span>' +
     '</div>' +
-    '<div class="small muted">' + o.date + ' ' + (o.t1 || '') + '-' + (o.t2 || '') +
-      ' · ' + escapeHtml(o.city || '') + '</div>' +
-    renderOrderBadges(o) +
-    (showTakeBtn(o)
-      ? '<div style="margin-top:8px">' + takeButton(o) + '</div>'
-      : '') +
+    '<div class="small muted">' + escapeHtml(o.date || '—') + ' ' +
+      escapeHtml(o.t1 || '') + '-' + escapeHtml(o.t2 || '') +
+      ' · 👷 ' + worker + '</div>' +
+    (badges ? '<div class="small" style="margin-top:4px">' + badges + '</div>' : '') +
+  '</div>';
+}
+
+// Развёрнутый вид: всё из свёрнутого + телефон, адрес, кнопки действий.
+function renderOrderListItemExpanded(o) {
+  const mine = isAssignedToMe(o);
+  const badges = (typeof renderOrderBadges === 'function') ? renderOrderBadges(o) : '';
+  const worker = o.worker ? escapeHtml(o.worker) : '<span class="muted">не назначен</span>';
+  const address = [o.city, o.address].filter(Boolean).join(', ');
+  return '<div class="list-item' + (mine ? ' mine' : '') + ' order-card-expanded' +
+    '" data-order="' + o.id + '">' +
+    '<div class="spread">' +
+      '<b>№' + escapeHtml(orderDisplayNumber(o)) + ' ' + escapeHtml(o.client || '—') + '</b>' +
+      '<span class="' + statusBadgeClass(o.status) + '">' +
+        escapeHtml(STATUS_LABELS[o.status] || o.status) + '</span>' +
+    '</div>' +
+    '<div class="small muted">📅 ' + escapeHtml(o.date || '—') + ' ' +
+      escapeHtml(o.t1 || '') + '-' + escapeHtml(o.t2 || '') + '</div>' +
+    '<div class="small">👷 ' + worker + '</div>' +
+    (o.phone ? '<div class="small">📞 <a href="tel:' + escapeHtml(o.phone) + '">' +
+      escapeHtml(o.phone) + '</a></div>' : '') +
+    (address ? '<div class="small">📍 ' + escapeHtml(address) + '</div>' : '') +
+    (badges ? '<div class="small" style="margin-top:4px">' + badges + '</div>' : '') +
+    '<div class="row" style="margin-top:8px;gap:6px">' +
+      '<button class="btn" data-collapse-order="' + o.id + '" style="flex:1">🔼 Свернуть</button>' +
+      '<button class="btn btn-primary" data-open-order="' + o.id + '" style="flex:1">📖 Открыть</button>' +
+    '</div>' +
   '</div>';
 }
 
@@ -912,6 +958,33 @@ document.addEventListener('click', function (ev) {
     const p = window.__assignPending;
     if (p) { applyAssignWorker(p.id, p.name); }
     else { closeModal(); }
+    return;
+  }
+
+  // Развернуть свёрнутую карточку (Этап 28).
+  const expandBtn = sel('[data-expand-order]');
+  if (expandBtn) {
+    const id = Number(expandBtn.getAttribute('data-expand-order'));
+    EXPANDED_ORDERS[id] = true;
+    render();
+    return;
+  }
+
+  // Свернуть развёрнутую карточку (Этап 28).
+  const collapseBtn = sel('[data-collapse-order]');
+  if (collapseBtn) {
+    const id = Number(collapseBtn.getAttribute('data-collapse-order'));
+    delete EXPANDED_ORDERS[id];
+    render();
+    return;
+  }
+
+  // Открыть полный экран заявки из развёрнутой карточки (Этап 28).
+  const openBtn = sel('[data-open-order]');
+  if (openBtn) {
+    const id = Number(openBtn.getAttribute('data-open-order'));
+    ORD_TAB = 'main';
+    go('order', id);
     return;
   }
 

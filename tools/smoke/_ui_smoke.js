@@ -51,7 +51,7 @@ assert(listHtml.indexOf('data-order=') >= 0, 'renderOrdersList: есть кар�
 assert.eq(listHtml.split('data-order=').length - 1, 5,
   'worker: 4 свои + 1 из пула = 5 видимых карточек');
 assert(listHtml.indexOf('👷 МОЯ') >= 0, 'бейдж «МОЯ» у заявки Мастера');
-assert(listHtml.indexOf('class="list-item mine"') >= 0, '«моя» карточка помечена');
+assert(listHtml.indexOf('list-item mine') >= 0, '«моя» карточка помечена');
 assert(listHtml.indexOf('data-take-order=') >= 0, 'worker: у пул-заявки есть кнопка «Взять»');
 
 // --- фильтр «Сегодня»: считаем по ВИДИМОМУ воркером подмножеству
