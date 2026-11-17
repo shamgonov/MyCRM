@@ -86,6 +86,9 @@ loadModule('app/auth.js');
 loadModule('app/core.js');
 loadModule('app/gates.js');
 loadModule('app/orders.js');
+// Этап 14-B: для старта слушателей и отправки нужен подтверждённый доступ.
+state.cloudStatus = 'approved';
+state.cloudActive = true;
 loadModule('app/sync.js'); // авто-initSync(): orders + справочники + settings/org
 
 setOwnerFlag(false);

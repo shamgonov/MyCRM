@@ -8,6 +8,9 @@ var state = {
   role: null,        // 'admin'|'operator'|'manager'|'worker' (мок-вход, Этап 1)
   user: null,        // имя пользователя
   uid: null,         // Firebase Auth uid (Этап 14-A; null в мок-режиме)
+  cloudRole: null,   // Этап 14-B: роль из users/{uid} ('owner'|'admin'|...)
+  cloudStatus: null, // Этап 14-B: 'approved' | 'pending' | 'fired'
+  cloudActive: true, // Этап 14-B: флаг active из users/{uid}
   screen: 'login',   // текущий экран
   orderId: null,     // открытая заявка
   filter: 'all',     // фильтр списка заявок
@@ -103,7 +106,9 @@ function render() {
   const app = document.getElementById('app');
   if (!app) return;
   const fn = S[state.screen] || S.login;
-  app.innerHTML = fn();
+  // Баннер статуса облачного доступа (Этап 14-B) — над содержимым экрана.
+  const banner = (typeof renderAccessBanner === 'function') ? renderAccessBanner() : '';
+  app.innerHTML = banner + fn();
   renderNav();
 }
 
@@ -276,9 +281,17 @@ document.addEventListener('click', function (ev) {
     // без него приложение работает локально, ошибка не блокирует вход.
     if (typeof firebase !== 'undefined' && firebase.auth) {
       try {
-        firebase.auth().signInAnonymously().catch(function (e) {
-          console.warn('Anonymous auth недоступен:', e && e.code);
-        });
+        firebase.auth().signInAnonymously()
+          .then(function () {
+            return typeof ensureMyUserDoc === 'function' ? ensureMyUserDoc(name) : null;
+          })
+          .then(function () {
+            if (typeof watchMyAccess === 'function') watchMyAccess();
+            render();
+          })
+          .catch(function (e) {
+            console.warn('Anonymous auth недоступен:', e && e.code);
+          });
       } catch (e) {
         console.warn('Anonymous auth недоступен:', e && e.message);
       }
@@ -313,12 +326,24 @@ function restoreTestSession() {
   } catch (e) { /* битая запись — остаёмся на экране входа */ }
   return false;
 }
-restoreTestSession();
+// В браузере core.js идёт раньше auth.js (login ещё не определён) — вызов
+// гардится typeof; повторный вызов в бут-блоке ниже не нужен.
+if (typeof login === 'function') restoreTestSession();
 
 if (state.role === null) state.screen = 'login';
+// core.js грузится раньше auth.js: восстановление сессии (login из auth.js)
+// и облачной идентичности выполняем на DOMContentLoaded, когда все модули
+// определены. Синхронный вызов выше остаётся для смоуков (порядок db→auth→core).
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', render);
+  document.addEventListener('DOMContentLoaded', function () {
+    if (state.role === null) restoreTestSession();
+    if (typeof resumeCloudSession === 'function') resumeCloudSession();
+    if (state.role === null) state.screen = 'login';
+    render();
+  });
 } else {
+  if (state.role === null) restoreTestSession();
+  if (typeof resumeCloudSession === 'function') resumeCloudSession();
   render();
 }
 

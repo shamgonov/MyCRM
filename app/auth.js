@@ -264,4 +264,97 @@ function resetPin() {
   lsSet('crm2_pin', '');
 }
 
+// --- Этап 14-B: облачная идентичность (uid → users/{uid}) ---
+
+// cloudAvailable(): есть SDK, вошедший пользователь и Firestore.
+function cloudAvailable() {
+  return typeof firebase !== 'undefined' && firebase.firestore && firebase.auth &&
+         !!firebase.auth().currentUser;
+}
+function myUserRef() {
+  return firebase.firestore().collection('users').doc(firebase.auth().currentUser.uid);
+}
+function bootstrapRef() {
+  return firebase.firestore().collection('meta').doc('bootstrap');
+}
+function cloudApproved() {
+  return state.cloudStatus === 'approved' && state.cloudActive === true;
+}
+
+// Первый вошедший занимает владельца (meta/bootstrap.ownerUid), остальные — worker/pending.
+function ensureMyUserDoc(name) {
+  if (!cloudAvailable()) return Promise.resolve(null);
+  var uid = firebase.auth().currentUser.uid;
+  state.uid = uid;
+  lsSet('crm2_uid', uid);
+  var base = { uid: uid, id: uid, name: name || state.user || 'Сотрудник',
+    phone: '', deviceId: deviceId(), rosterId: null, active: true, createdAt: Date.now() };
+  function writeRec(role, status) {
+    var rec = Object.assign({}, base, { role: role, status: status });
+    return myUserRef().set(rec, { merge: true }).then(function () { return rec; });
+  }
+  return myUserRef().get().then(function (snap) {
+    if (snap.exists) return snap.data();
+    return bootstrapRef().get().then(function (b) {
+      var free = !b.exists || !b.data().ownerUid;
+      if (!free) return writeRec('worker', 'pending');
+      return bootstrapRef()
+        .set({ ownerUid: uid, claimedAt: Date.now(), claimedBy: base.name }, { merge: true })
+        .then(function () { return writeRec('owner', 'approved'); })
+        .catch(function () { return writeRec('worker', 'pending'); }); // гонка за владельца
+    });
+  }).then(function (rec) {
+    if (rec) applyCloudIdentity(rec);
+    return rec;
+  }).catch(function (e) {
+    console.warn('ensureMyUserDoc:', e.code || e.message);
+    return null;
+  });
+}
+
+// Роль в облаке — источник прав. Локальную роль приводим к ней после подтверждения.
+function applyCloudIdentity(rec) {
+  state.cloudRole = rec.role || 'worker';
+  state.cloudStatus = rec.status || 'pending';
+  state.cloudActive = rec.active !== false;
+  if (cloudApproved() && state.role) {
+    var mapped = state.cloudRole === 'owner' ? 'admin' : state.cloudRole;
+    if (['admin','manager','operator','worker'].indexOf(mapped) >= 0 && state.role !== mapped) {
+      state.role = mapped;
+      lsSet('crm2_test_user', JSON.stringify({ role: state.role, name: state.user }));
+    }
+  }
+  if (typeof syncAccessChanged === 'function') syncAccessChanged();
+}
+
+function watchMyAccess() {
+  if (!cloudAvailable()) return;
+  myUserRef().onSnapshot(function (snap) {
+    if (snap.exists) applyCloudIdentity(snap.data());
+  }, function (err) { console.warn('watchMyAccess:', err.code || err.message); });
+}
+
+// Возобновление облачной идентичности после перезагрузки страницы:
+// Firebase сам восстановит анонимную сессию → переприменяем users/{uid}.
+function resumeCloudSession() {
+  if (typeof firebase === 'undefined' || !firebase.auth) return;
+  firebase.auth().onAuthStateChanged(function (user) {
+    if (!user || !state.role) return;
+    ensureMyUserDoc(state.user).then(function () { watchMyAccess(); });
+  });
+}
+
+// Баннер статуса доступа (пустая строка, когда доступ подтверждён или облака нет).
+function renderAccessBanner() {
+  if (typeof firebase === 'undefined' || !state.role) return '';
+  if (cloudApproved()) return '';
+  var txt = state.cloudStatus === 'pending'
+    ? '⏳ Доступ к общей базе ожидает подтверждения владельцем. Пока всё сохраняется локально.'
+    : (state.cloudStatus === 'fired' || state.cloudActive === false)
+      ? '🚫 Доступ к общей базе закрыт владельцем. Работа только локально.'
+      : '🔌 Подключение к общей базе…';
+  return '<div class="card" style="border-color:var(--warn)">' +
+    '<p class="small" style="color:var(--warn);margin:0">' + txt + '</p></div>';
+}
+
 deviceId();

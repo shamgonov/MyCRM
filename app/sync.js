@@ -39,9 +39,32 @@ function initSync() {
   }
   if (!firestore) return false;
 
-  // Удалённые изменения коллекции orders → локальный DB (merge-подобно).
+  // Этап 14-B: подписки НЕ запускаются автоматически — только после
+  // подтверждения доступа (syncAccessChanged → startOrdersListener).
+  // Без cloudApproved() приложение остаётся локальным, очередь копится.
+  if (typeof cloudApproved !== 'function' || cloudApproved()) {
+    ORDERS_LISTENERS_ALLOWED = true;
+    startOrdersListener();
+    startCollectionListeners();
+  }
+
+  return true;
+}
+
+// --- 1.5 Подписки (Этап 14-B: идемпотентные, с гардом) ---
+
+var ORDERS_LISTENERS_ALLOWED = false; // initSync сработал — слушатели разрешены
+var ORDERS_SNAPSHOT_ON = false;
+
+// startOrdersListener(): onSnapshot('orders') → merge в DB.orders.
+function startOrdersListener() {
+  if (ORDERS_SNAPSHOT_ON) return false;
+  if (typeof firebase === 'undefined' || !firebase.firestore) return false;
+  if (!ORDERS_LISTENERS_ALLOWED &&
+      (typeof cloudApproved !== 'function' || !cloudApproved())) return false;
+  ORDERS_SNAPSHOT_ON = true;
   try {
-    firestore.collection('orders').onSnapshot(function (snapshot) {
+    firebase.firestore().collection('orders').onSnapshot(function (snapshot) {
       if (!snapshot || typeof snapshot.docChanges !== 'function') return;
       snapshot.docChanges().forEach(function (change) {
         if (change.type === 'removed') return; // удаления в Этапе 21 не синхронизируем
@@ -73,14 +96,31 @@ function initSync() {
       if (err && err.code === 'permission-denied') toast('Нет прав на синхронизацию', true);
     });
   } catch (e) {
+    ORDERS_SNAPSHOT_ON = false;
     console.error('initSync: подписка — ' + e.message);
     return false;
   }
-
-  // Общая база справочников (Этап 24): подписки на clients/suppliers/...
-  startCollectionListeners();
-
   return true;
+}
+
+// Смена статуса доступа (Этап 14-B): подтверждён → слушатели + разблокировка
+// очереди; не подтверждён → локальный режим, очередь копится (SYNC_PAUSED).
+var SYNC_LISTENERS_ON = false;
+function syncAccessChanged() {
+  if (typeof cloudApproved !== 'function') return;
+  if (cloudApproved()) {
+    SYNC_PAUSED = false;
+    if (!SYNC_LISTENERS_ON) {
+      SYNC_LISTENERS_ON = true;
+      ORDERS_LISTENERS_ALLOWED = true;
+      startOrdersListener();
+      startCollectionListeners();
+    }
+    flushQueue();
+  } else {
+    SYNC_PAUSED = true;
+  }
+  if (typeof render === 'function' && typeof state !== 'undefined' && state.role) render();
 }
 
 // --- 2. Утилиты ---
@@ -169,6 +209,11 @@ function orderPatch(id, fields) {
 // очереди снимается ДО отправки). Рекурсия через save() гасится флагом.
 function flushQueue() {
   if (typeof firebase === 'undefined') return; // локальный режим — очередь ждёт
+  // Этап 14-B: без подтверждённого доступа очередь копится локально.
+  if (typeof cloudApproved === 'function' && !cloudApproved()) {
+    SYNC_PAUSED = true;
+    return;
+  }
   if (SYNC_FLUSHING || SYNC_PAUSED) return;
   if (!Array.isArray(DB.syncQueue) || !DB.syncQueue.length) return;
   SYNC_FLUSHING = true;
@@ -177,6 +222,13 @@ function flushQueue() {
 
 // pump(): берёт голову очереди и отправляет; по результату берёт следующую.
 function pump() {
+  // access мог измениться (fired/pending) во время отправки — встаём на паузу
+  // ДО извлечения операции, чтобы ничего не потерять.
+  if (typeof cloudApproved === 'function' && !cloudApproved()) {
+    SYNC_PAUSED = true;
+    if (SYNC_FLUSHING) finishFlush();
+    return;
+  }
   if (!DB.syncQueue.length) { finishFlush(); return; }
   var op = DB.syncQueue.shift(); // SPEC правило 6: снять ДО отправки
   var p = null;
@@ -317,6 +369,10 @@ function startCollectionListeners() {
   if (typeof firebase === 'undefined' || !firebase.firestore) return false;
   var fs = firebase.firestore();
   SYNC_COLLECTIONS.forEach(function (name) {
+    // Этап 14-B: мастер по правилам не читает чужие users/*; свой документ он
+    // и так слушает через watchMyAccess(). Подписка упала бы permission-denied.
+    if (name === 'users' && typeof state !== 'undefined' &&
+        state.cloudRole === 'worker') return;
     fs.collection(name).onSnapshot(function (snap) {
       var docs = [];
       snap.forEach(function (doc) { docs.push(doc.data()); });
@@ -355,6 +411,8 @@ window.settingsSharedSlice = settingsSharedSlice;
 window.applyRemoteCollection = applyRemoteCollection;
 window.applyRemoteSettings = applyRemoteSettings;
 window.startCollectionListeners = startCollectionListeners;
+window.startOrdersListener = startOrdersListener;
+window.syncAccessChanged = syncAccessChanged;
 
 // Автозапуск: в браузере с SDK включаем realtime-подписку; без SDK — false,
 // приложение продолжает работать локально (это штатный офлайн-режим).

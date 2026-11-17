@@ -234,9 +234,52 @@ function renderSupplierModal(supplier) {
 
 // --- 1. Главный экран админки ---
 
+// --- Вкладка «Доступ» (Этап 14-B): облачные пользователи users/{uid} ---
+
+function accessRoleOptions(cur) {
+  return ['owner','admin','manager','operator','worker'].map(function (r) {
+    return '<option value="' + r + '"' + (r === cur ? ' selected' : '') + '>' + r + '</option>';
+  }).join('');
+}
+function renderAdminAccess() {
+  var list = (DB.users || []).filter(function (u) { return u.uid && String(u.id) === String(u.uid); });
+  if (!list.length) {
+    return '<div class="card"><p class="muted">Облачных пользователей пока нет. ' +
+      'Попросите коллегу открыть ссылку и войти.</p></div>';
+  }
+  var rows = list.map(function (u) {
+    var pending = u.status !== 'approved';
+    return arow([
+      escapeHtml(u.name || '—'),
+      '<span class="small">' + escapeHtml(String(u.uid).slice(0, 8)) + '…</span>',
+      '<select data-access-role="' + u.id + '">' + accessRoleOptions(u.role || 'worker') + '</select>',
+      pending ? '<span class="badge badge-warn">ожидает</span>' : '<span class="badge badge-ok">доступен</span>',
+      '<span class="row">' +
+        (pending ? '<button class="btn btn-primary" data-access-approve="' + u.id + '">✅</button>' : '') +
+        '<button class="btn btn-danger" data-access-block="' + u.id + '">🚫</button>' +
+      '</span>'
+    ], false, COLS_EMP);
+  }).join('');
+  return '<div class="card">' +
+    '<h4>Доступ к общей базе</h4>' +
+    arow(['Имя','UID','Роль','Статус',''], true, COLS_EMP) + rows +
+    '<p class="small muted">Роль и статус пишутся в users/{uid} — их читают правила Firestore.</p>' +
+    '</div>';
+}
+// setAccess(id, patch): правка users/{uid} + отправка в облако.
+function setAccess(id, patch) {
+  var u = (DB.users || []).find(function (x) { return String(x.id) === String(id); });
+  if (!u) return false;
+  Object.keys(patch).forEach(function (k) { u[k] = patch[k]; });
+  save();
+  if (typeof collectionSave === 'function') collectionSave('users', u);
+  return true;
+}
+
 function renderAdmin() {
   const tabs = [
-    ['employees', '👥 Сотрудники'], ['requisites', '🏢 Реквизиты'],
+    ['employees', '👥 Сотрудники'], ['access', '🔑 Доступ'],
+    ['requisites', '🏢 Реквизиты'],
     ['price', '📋 Прайс'], ['suppliers', '🚚 Поставщики']
   ];
   const tabHtml = tabs.map(function (t) {
@@ -248,6 +291,7 @@ function renderAdmin() {
   if (ADMIN_TAB === 'requisites') body = renderAdminRequisites();
   else if (ADMIN_TAB === 'price') body = renderAdminPrice();
   else if (ADMIN_TAB === 'suppliers') body = renderAdminSuppliers();
+  else if (ADMIN_TAB === 'access') body = renderAdminAccess();
   else body = renderAdminEmployees();
 
   return '<h2>⚙️ Администрирование</h2>' +
@@ -321,6 +365,33 @@ document.addEventListener('click', function (ev) {
 
   const tab = sel('[data-admin-tab]');
   if (tab) { ADMIN_TAB = tab.getAttribute('data-admin-tab'); render(); return; }
+
+  // Доступ к общей базе (Этап 14-B): подтвердить/заблокировать/сменить роль.
+  const approveBtn = sel('[data-access-approve]');
+  if (approveBtn) {
+    const aid = approveBtn.getAttribute('data-access-approve');
+    if (setAccess(aid, { status: 'approved', active: true })) {
+      toast('Доступ подтверждён');
+    } else {
+      toast('Пользователь не найден', true);
+    }
+    render();
+    return;
+  }
+
+  const blockBtn = sel('[data-access-block]');
+  if (blockBtn) {
+    const bid = blockBtn.getAttribute('data-access-block');
+    if (confirm('Закрыть доступ к общей базе?')) {
+      if (setAccess(bid, { status: 'fired', active: false })) {
+        toast('Доступ закрыт');
+      } else {
+        toast('Пользователь не найден', true);
+      }
+      render();
+    }
+    return;
+  }
 
   const modeBtn = sel('[data-mode]');
   if (modeBtn) {
@@ -473,6 +544,19 @@ document.addEventListener('click', function (ev) {
 
 // Смену роли читаем на change: click не отражает выбор option.
 document.addEventListener('change', function (ev) {
+  // Смена роли облачного пользователя на вкладке «Доступ» (Этап 14-B).
+  const accessSel = ev.target.closest && ev.target.closest('[data-access-role]');
+  if (accessSel) {
+    const aid = accessSel.getAttribute('data-access-role');
+    if (setAccess(aid, { role: accessSel.value })) {
+      toast('Роль доступа обновлена');
+    } else {
+      toast('Пользователь не найден', true);
+    }
+    render();
+    return;
+  }
+
   const select = ev.target.closest && ev.target.closest('[data-role-change]');
   if (!select) return;
   const uid = select.getAttribute('data-role-change');
@@ -486,3 +570,6 @@ document.addEventListener('change', function (ev) {
 
 // Явный экспорт в window: экран вызывается из карты S (core.js).
 window.renderAdmin = renderAdmin;
+window.renderAdminAccess = renderAdminAccess;
+window.setAccess = setAccess;
+window.accessRoleOptions = accessRoleOptions;

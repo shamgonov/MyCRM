@@ -1,14 +1,89 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
-    match /orders/{id}    { allow read, write: if isSignedIn(); }
-    match /users/{id}     { allow read, write: if isSignedIn(); }
-    match /clients/{id}   { allow read, write: if isSignedIn(); }
-    match /suppliers/{id} { allow read, write: if isSignedIn(); }
-    match /tasks/{id}     { allow read, write: if isSignedIn(); }
-    match /templates/{id} { allow read, write: if isSignedIn(); }
-    match /priceList/{id} { allow read, write: if isSignedIn(); }
-    match /settings/{id}  { allow read, write: if isSignedIn(); }
+
+    function signedIn() { return request.auth != null; }
+    function mePath() { return /databases/$(database)/documents/users/$(request.auth.uid); }
+    function hasMe() { return signedIn() && exists(mePath()); }
+    function me() { return get(mePath()).data; }
+    function isActive() { return hasMe() && me().status == 'approved' && me().active == true; }
+    function myRole() { return isActive() ? me().role : 'guest'; }
+    function myName() { return isActive() ? me().name : ''; }
+    function isOwner() { return myRole() == 'owner'; }
+    function isOwnerOrAdmin() { return myRole() in ['owner','admin']; }
+    function isStaff() { return myRole() in ['owner','admin','manager','operator']; }
+    function bootPath() { return /databases/$(database)/documents/meta/bootstrap; }
+    function amBootOwner() {
+      return signedIn() && exists(bootPath()) && get(bootPath()).data.ownerUid == request.auth.uid;
+    }
+    function assignedToMe(d) {
+      return d.get('worker','') == myName() || myName() in d.get('helpers', []);
+    }
+    function isFreePool(d) {
+      return d.get('worker','') == '' && d.get('status','new') in ['new','inspection','approved'];
+    }
+    function workerKeys() {
+      return ['works','extras','materials','status','history','viewedBy','confirm','tags',
+              'callbackAt','takenAt','takenBy','payments','moneyReminderAt','enroute',
+              'startedTs','updatedAt','ts'];
+    }
+
+    match /meta/bootstrap {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerUid == request.auth.uid;
+      allow update: if signedIn() && (
+        (resource.data.get('ownerUid','') == '' &&
+         request.resource.data.ownerUid == request.auth.uid &&
+         request.resource.data.diff(resource.data).affectedKeys()
+           .hasOnly(['ownerUid','claimedAt','claimedBy']))
+        || (isOwner() && resource.data.ownerUid == request.auth.uid));
+      allow delete: if false;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isStaff());
+      allow create: if signedIn() && request.auth.uid == userId &&
+        request.resource.data.uid == userId &&
+        request.resource.data.role == 'worker' &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.active == true;
+      allow create: if amBootOwner() && request.auth.uid == userId &&
+        request.resource.data.uid == userId &&
+        request.resource.data.role == 'owner' &&
+        request.resource.data.status == 'approved';
+      allow create, update: if isOwnerOrAdmin();
+      allow update: if myRole() == 'manager' &&
+        resource.data.get('role','worker') in ['manager','operator','worker'] &&
+        request.resource.data.get('role','worker') in ['manager','operator','worker'];
+      allow update: if signedIn() && request.auth.uid == userId &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['name','phone','profile','deviceId','rosterId','updatedAt','ts']);
+      allow delete: if isOwnerOrAdmin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if isActive();
+      allow create: if isStaff();
+      allow update: if isStaff() ||
+        (isActive() && assignedToMe(resource.data) &&
+         request.resource.data.diff(resource.data).affectedKeys().hasOnly(workerKeys()));
+      allow update: if isActive() && isFreePool(resource.data) &&
+        request.resource.data.worker == myName() &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['worker','takenAt','takenBy','history','ts','updatedAt']);
+      allow update: if isActive() && myName() in resource.data.get('helpers', []) &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['helpers','confirm','history','ts','updatedAt']);
+      allow delete: if isOwnerOrAdmin();
+    }
+
+    match /clients/{id}   { allow read: if isActive(); allow create, update: if isStaff(); allow delete: if isOwnerOrAdmin(); }
+    match /suppliers/{id} { allow read: if isActive(); allow create, update: if isStaff(); allow delete: if isOwnerOrAdmin(); }
+    match /templates/{id} { allow read: if isActive(); allow create, update: if isStaff(); allow delete: if isOwnerOrAdmin(); }
+    match /priceList/{id} { allow read: if isActive(); allow create, update, delete: if isOwnerOrAdmin(); }
+    match /tasks/{id}     { allow read, create, update: if isActive(); allow delete: if isOwnerOrAdmin(); }
+    match /settings/{id}  { allow read: if isActive(); allow create, update, delete: if isOwnerOrAdmin(); }
+
+    match /{document=**} { allow read, write: if false; }
   }
 }

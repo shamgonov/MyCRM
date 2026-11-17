@@ -100,6 +100,10 @@ loadModule('app/core.js');
 loadModule('app/gates.js');
 loadModule('app/orders.js');
 loadModule('app/ui-orders.js');
+// Этап 14-B: слушатели и отправка очереди требуют cloudApproved().
+// Смоук моделирует подтверждённого пользователя.
+state.cloudStatus = 'approved';
+state.cloudActive = true;
 loadModule('app/sync.js'); // авто-initSync() подписывает MOCK.snapCb
 
 setOwnerFlag(false);
