@@ -40,6 +40,10 @@ function normalizeOrder(o) {
   if (!Array.isArray(o.payments)) o.payments = [];
   // Подтверждение соисполнителя (Этап 14)
   if (!o.confirm || typeof o.confirm !== 'object' || Array.isArray(o.confirm)) o.confirm = {};
+  // Перенос остатка (Этап 15): связи родитель/дети.
+  if (!o.parentId) o.parentId = null;
+  if (!o.childNo) o.childNo = null;
+  if (!Array.isArray(o.followUpIds)) o.followUpIds = [];
   // Теги проблемы (Этап 17)
   if (!Array.isArray(o.tags)) o.tags = [];
   // Время перезвона по итогам звонка (Этап 19): null = не назначен.
@@ -287,14 +291,16 @@ function orderDisplayNumber(o) {
   return String(o.id);
 }
 
-// createFollowUpOrder(parent, data): перенос невыполненного остатка в новую
+// createFollowUpOrder(parentId, data): перенос невыполненного остатка в новую
 // дочернюю заявку. Копирует работы без done/skipped и материалы needed,
 // наследует клиента/адрес, связывает родителя и ребёнка в обе стороны.
-function createFollowUpOrder(parent, data) {
+// Защита: не более 9 дочерних (childNo — цифра дробного номера).
+function createFollowUpOrder(parentId, data) {
+  var parent = (DB.orders || []).find(function (x) { return x.id === Number(parentId); });
   if (!parent) return null;
   var d = data || {};
   normalizeOrder(parent);
-  if (!Array.isArray(parent.followUpIds)) parent.followUpIds = [];
+  if (parent.followUpIds.length >= 9) return null;
   var childNo = parent.followUpIds.length + 1;
 
   var clone = function (x) { return Object.assign({}, x); };

@@ -306,8 +306,11 @@ function renderFollowUpBlock(o, editable) {
 
   let links = '';
   if (parent) {
+    const parentOrder = (DB.orders || []).find(function (x) { return x.id === parent; });
+    const pNum = (typeof orderDisplayNumber === 'function' && parentOrder)
+      ? orderDisplayNumber(parentOrder) : parent;
     links += '<div>Родитель: <b><span data-order="' + parent + '" style="color:var(--accent);cursor:pointer">№' +
-      parent + '</span></b></div>';
+      pNum + '</span></b></div>';
   }
   if (kids) {
     links += '<div class="muted">Дочерние: ' + (o.followUpIds || []).map(function (id) {
@@ -317,7 +320,8 @@ function renderFollowUpBlock(o, editable) {
     }).join(', ') + '</div>';
   }
 
-  const btn = editable
+  // Перенос остатка доступен отложенной заявке (инструктаж клиента/пауза работ).
+  const btn = (editable && o.status === 'postponed')
     ? '<button class="btn" data-followup="' + o.id + '" style="margin-top:8px">🔄 Перенести остаток</button>'
     : '';
 
@@ -445,6 +449,12 @@ function renderFollowUpModal(o) {
     'Выполненные строки войдут в промежуточный акт.</p>' +
     '<label class="field"><span>Дата новой заявки</span>' +
       '<input id="fu-date" type="date" value="' + (o.date || localToday()) + '"></label>' +
+    '<div class="row">' +
+      '<label class="field" style="flex:1"><span>Время с</span>' +
+        '<input id="fu-t1" type="time" value="' + escapeHtml(o.t1 || '09:00') + '"></label>' +
+      '<label class="field" style="flex:1"><span>Время до</span>' +
+        '<input id="fu-t2" type="time" value="' + escapeHtml(o.t2 || '12:00') + '"></label>' +
+    '</div>' +
     '<div class="row">' +
       '<button class="btn" data-close style="flex:1">Отмена</button>' +
       '<button class="btn btn-primary" data-create-followup="' + o.id + '" style="flex:1">Создать дочернюю</button>' +
@@ -578,8 +588,13 @@ document.addEventListener('click', function (ev) {
       var el = document.getElementById(id);
       return el ? el.value.trim() : '';
     };
-    var child = createFollowUpOrder(o, { date: val('fu-date') || localToday() });
-    if (!child) { toast('Не удалось создать дочернюю заявку', true); return; }
+    // createFollowUpOrder(parentId, data) — сигнатура Этапа 15 (ТЗ).
+    var child = createFollowUpOrder(o.id, {
+      date: val('fu-date') || localToday(),
+      t1: val('fu-t1'),
+      t2: val('fu-t2')
+    });
+    if (!child) { toast('Не удалось создать дочернюю заявку (не больше 9?)', true); return; }
     closeModal();
     toast('Создана дочерняя заявка №' + orderDisplayNumber(child));
     render();
