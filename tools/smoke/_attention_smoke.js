@@ -12,6 +12,8 @@ globalThis.localStorage = (function () {
 const appStub = { innerHTML: '' };
 const navStub = { innerHTML: '' };
 const modalStub = { innerHTML: '' };
+// Поля модалки выбора даты/времени перезвона: id → { value }.
+const FIELDS = {};
 const clickHandlers = [];
 globalThis.document = {
   readyState: 'loading',
@@ -19,7 +21,7 @@ globalThis.document = {
     if (id === 'app') return appStub;
     if (id === 'nav') return navStub;
     if (id === 'modal-container') return modalStub;
-    return null;
+    return Object.prototype.hasOwnProperty.call(FIELDS, id) ? FIELDS[id] : null;
   },
   addEventListener: function (type, fn) { if (type === 'click') clickHandlers.push(fn); }
 };
@@ -158,7 +160,7 @@ CALL_BRANCHES.forEach(function (b) {
   assert(modalHtml.indexOf(b[1]) >= 0, 'callModal: кнопка ' + b[0]);
   assert(modalHtml.indexOf('data-call-result="' + b[0] + '"') >= 0, 'callModal: data для ' + b[0]);
 });
-assert.eq(CALL_BRANCHES.length, 6, 'callModal: ровно 6 веток');
+assert.eq(CALL_BRANCHES.length, 11, 'callModal: ровно 11 веток');
 assert(modalHtml.indexOf('onclick') < 0, 'callModal: инлайн-обработчиков нет');
 closeModal();
 
@@ -174,10 +176,49 @@ assert(callOrder.history.some(function (h) {
 }), 'no_answer: запись call_result в историю');
 assert.eq(callOrder.status, 'new', 'no_answer: статус не изменён');
 
-// 7.2 «Перезвонить позже» → +24 ч.
-const r2 = applyCallResult(callOrder, 'later');
-assert.eq(r2.ok, true, 'later: ok');
-assert(callOrder.callbackAt > Date.now() + 23 * 3600000, 'later: callbackAt ≈ +24 ч');
+// 7.2 «Перезвонить через 1 час» → callbackAt ≈ +1 ч.
+const r2 = applyCallResult(callOrder, 'later_1h');
+assert.eq(r2.ok, true, 'later_1h: ok');
+assert(callOrder.callbackAt > Date.now() + 0.9 * 3600000, 'later_1h: callbackAt ≈ +1 ч');
+assert(callOrder.callbackAt < Date.now() + 1.1 * 3600000, 'later_1h: callbackAt в пределах 1 ч');
+
+// 7.3 «Перезвонить через 2 часа» → callbackAt ≈ +2 ч.
+const r2h = applyCallResult(callOrder, 'later_2h');
+assert.eq(r2h.ok, true, 'later_2h: ok');
+assert(callOrder.callbackAt > Date.now() + 1.9 * 3600000, 'later_2h: callbackAt ≈ +2 ч');
+assert(callOrder.callbackAt < Date.now() + 2.1 * 3600000, 'later_2h: callbackAt в пределах 2 ч');
+
+// 7.4 «Перезвонить через 4 часа» → callbackAt ≈ +4 ч.
+const r4h = applyCallResult(callOrder, 'later_4h');
+assert.eq(r4h.ok, true, 'later_4h: ok');
+assert(callOrder.callbackAt > Date.now() + 3.9 * 3600000, 'later_4h: callbackAt ≈ +4 ч');
+assert(callOrder.callbackAt < Date.now() + 4.1 * 3600000, 'later_4h: callbackAt в пределах 4 ч');
+
+// 7.5 «Перезвонить через 24 часа» → callbackAt ≈ +24 ч.
+const r24h = applyCallResult(callOrder, 'later_24h');
+assert.eq(r24h.ok, true, 'later_24h: ok');
+assert(callOrder.callbackAt > Date.now() + 23 * 3600000, 'later_24h: callbackAt ≈ +24 ч');
+assert(callOrder.callbackAt < Date.now() + 25 * 3600000, 'later_24h: callbackAt в пределах 24 ч');
+
+// 7.6 «Перезвонить завтра» → callbackAt = tomorrowAt9().
+const rTomorrow = applyCallResult(callOrder, 'later_tomorrow');
+assert.eq(rTomorrow.ok, true, 'later_tomorrow: ok');
+assert.eq(rTomorrow.text, 'Перезвон завтра в 09:00', 'later_tomorrow: текст toast');
+const tm9 = tomorrowAt9();
+assert(callOrder.callbackAt >= tm9 - 1000, 'later_tomorrow: callbackAt ≈ завтра 09:00');
+assert(callOrder.callbackAt <= tm9 + 1000, 'later_tomorrow: callbackAt ≈ завтра 09:00');
+assert(callOrder.status === 'new', 'later_tomorrow: статус не изменён');
+
+// 7.7 «Выбрать дату и время» → открывает модалку, callbackAt не меняется.
+const cbOrderBefore = callOrder.callbackAt;
+const rCustom = applyCallResult(callOrder, 'later_custom');
+assert.eq(rCustom.ok, true, 'later_custom: ok');
+assert.eq(rCustom.text, '', 'later_custom: пустой текст toast');
+assert(callOrder.callbackAt === cbOrderBefore, 'later_custom: callbackAt не изменился');
+assert(modalStub.innerHTML.indexOf('cc-date') >= 0, 'later_custom: модалка с cc-date');
+assert(modalStub.innerHTML.indexOf('cc-time') >= 0, 'later_custom: модалка с cc-time');
+assert(modalStub.innerHTML.indexOf('data-save-callback') >= 0, 'later_custom: кнопка data-save-callback');
+closeModal();
 
 // 7.3 «Согласована смета» → approved + сброс callbackAt.
 const r3 = applyCallResult(callOrder, 'approved');
@@ -221,7 +262,7 @@ assert(cancelOrder.history.some(function (h) {
 
 // 7.7 Неизвестная ветка / null.
 assert.eq(applyCallResult(cancelOrder, 'no_such').ok, false, 'неизвестная ветка → ok=false');
-assert.eq(applyCallResult(null, 'later').ok, false, 'null заявка → ok=false');
+assert.eq(applyCallResult(null, 'later_1h').ok, false, 'null заявка → ok=false');
 
 // --- 8. Делегат data-call-result (клик по кнопке в модалке) ---
 const delOrder = { id: 40, client: 'Делегат', status: 'new', worker: '', date: today,
@@ -233,6 +274,74 @@ fireClick('data-call-result', 'no_answer');
 assert(delOrder.callbackAt > Date.now(), 'делегат no_answer: callbackAt проставлен');
 assert(delOrder.history.some(function (h) { return h.action === 'call_result'; }),
   'делегат no_answer: история записана');
+
+// --- 8.1 Делегат data-save-callback: валидная дата/время ---
+const cbDelOrder = { id: 41, client: 'ДатаКолл', status: 'new', worker: '', date: today,
+  t1: '', t2: '', helpers: [], confirm: {}, works: [], extras: [], materials: [], history: [],
+  payments: [] };
+DB.orders = [cbDelOrder];
+state.orderId = 41;
+const futureDate = (function () {
+  var d = new Date();
+  d.setDate(d.getDate() + 3);
+  var mm = String(d.getMonth() + 1); if (mm.length < 2) mm = '0' + mm;
+  var dd = String(d.getDate()); if (dd.length < 2) dd = '0' + dd;
+  return d.getFullYear() + '-' + mm + '-' + dd;
+})();
+FIELDS['cc-date'] = { value: futureDate };
+FIELDS['cc-time'] = { value: '14:30' };
+fireClick('data-save-callback', '41');
+assert(cbDelOrder.callbackAt > Date.now(),
+  'делегат save-callback: callbackAt > now');
+assert(cbDelOrder.history.some(function (h) {
+  return h.action === 'call_result' && h.details.indexOf('📅 Перезвон ' + futureDate + ' в 14:30') >= 0;
+}), 'делегат save-callback: история записана');
+assert.eq(modalStub.innerHTML, '', 'делегат save-callback: модалка закрыта');
+
+// --- 8.2 Делегат data-save-callback: прошедшая дата → callbackAt не меняется ---
+const pastCbOrder = { id: 42, client: 'Мимо', status: 'new', worker: '', date: today,
+  t1: '', t2: '', helpers: [], confirm: {}, works: [], extras: [], materials: [], history: [],
+  payments: [], callbackAt: null };
+DB.orders = [pastCbOrder];
+state.orderId = 42;
+FIELDS['cc-date'] = { value: '2020-01-01' };
+FIELDS['cc-time'] = { value: '09:00' };
+fireClick('data-save-callback', '42');
+assert.eq(pastCbOrder.callbackAt, null,
+  'делегат save-callback: прошедшая дата → callbackAt не изменился');
+
+// --- 8.3 Делегат data-save-callback: пустая дата → callbackAt не меняется ---
+const emptyCbOrder = { id: 43, client: 'Пусто', status: 'new', worker: '', date: today,
+  t1: '', t2: '', helpers: [], confirm: {}, works: [], extras: [], materials: [], history: [],
+  payments: [], callbackAt: null };
+DB.orders = [emptyCbOrder];
+state.orderId = 43;
+FIELDS['cc-date'] = { value: '' };
+FIELDS['cc-time'] = { value: '' };
+fireClick('data-save-callback', '43');
+assert.eq(emptyCbOrder.callbackAt, null,
+  'делегат save-callback: пустые поля → callbackAt не изменился');
+
+// --- 8.4 tomorrowAt9: корректность ---
+const t9 = tomorrowAt9();
+assert(t9 > Date.now(), 'tomorrowAt9: больше текущего времени');
+assert(t9 < Date.now() + 48 * 3600000, 'tomorrowAt9: меньше +48 ч');
+const t9d = new Date(t9);
+assert.eq(t9d.getHours(), 9, 'tomorrowAt9: час = 9');
+assert.eq(t9d.getMinutes(), 0, 'tomorrowAt9: минуты = 0');
+
+// --- 8.5 renderCustomCallbackModal: HTML содержит нужные элементы ---
+const customOrder = { id: 44, client: 'Модалка', status: 'new', worker: '', date: today,
+  t1: '', t2: '', helpers: [], confirm: {}, works: [], extras: [], materials: [], history: [],
+  payments: [] };
+renderCustomCallbackModal(customOrder);
+assert(modalStub.innerHTML.indexOf('cc-date') >= 0, 'renderCustomCallbackModal: cc-date');
+assert(modalStub.innerHTML.indexOf('cc-time') >= 0, 'renderCustomCallbackModal: cc-time');
+assert(modalStub.innerHTML.indexOf('data-save-callback="44"') >= 0,
+  'renderCustomCallbackModal: data-save-callback="44"');
+assert(modalStub.innerHTML.indexOf('onclick') < 0,
+  'renderCustomCallbackModal: инлайн-обработчиков нет');
+closeModal();
 
 // Переход с экрана «Требует внимания» в карточку заявки.
 state.screen = 'overdue';
