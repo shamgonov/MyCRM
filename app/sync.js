@@ -62,6 +62,10 @@ function initSync() {
         } else {
           DB.orders.push(sanitize(remote));
         }
+        // Коллизия id между браузерами: счётчик обязан обогнать любой id из
+        // облака, иначе новый локальный id затрёт чужую заявку в Firestore.
+        // Поднимаем ДО save(), чтобы новое значение seq попало в localStorage.
+        bumpSeqToMaxOrderId();
         save();
       });
     }, function (err) {
@@ -92,6 +96,19 @@ function sanitize(obj) {
     cleaned[k] = sanitize(v);
   }
   return cleaned;
+}
+
+// bumpSeqToMaxOrderId(): счётчик id не должен отставать от id, приехавших из
+// облака. Иначе два браузера выдадут одинаковый id новой заявке и вторая
+// перезапишет первую в Firestore (set с merge по docId = id).
+function bumpSeqToMaxOrderId() {
+  var maxId = 0;
+  (DB.orders || []).forEach(function (o) {
+    var n = Number(o && o.id);
+    if (isFinite(n) && n > maxId) maxId = n;
+  });
+  DB.seq = Math.max(DB.seq || 0, maxId);
+  return DB.seq;
 }
 
 // --- 3. Очередь операций ---
@@ -213,6 +230,7 @@ if (typeof window !== 'undefined' && typeof window.addEventListener === 'functio
 // Экспорт до автозапуска: db.js уже мог вызвать window.flushQueue из save().
 window.initSync = initSync;
 window.sanitize = sanitize;
+window.bumpSeqToMaxOrderId = bumpSeqToMaxOrderId;
 window.queueOperation = queueOperation;
 window.orderSave = orderSave;
 window.orderPatch = orderPatch;

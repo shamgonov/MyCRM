@@ -244,6 +244,18 @@ DB.orders = [];
 fireSnapshot([{ client: 'без id', ts: 1 }]);
 assert.eq(DB.orders.length, 0, 'snapshot: без id — игнор');
 
+// --- 9.5 Коллизия id: seq обязан обогнать id из облака (защита от затирания) ---
+
+DB.orders = []; DB.syncQueue = []; DB.seq = 5;
+fireSnapshot([{ id: 42, client: 'Cloud', status: 'new', ts: 2000 }]);
+assert.eq(DB.seq, 42, 'snapshot: seq поднят до id из облака');
+fireSnapshot([{ id: 9, client: 'Cloud2', status: 'new', ts: 2000 }]);
+assert.eq(DB.seq, 42, 'snapshot: seq не понижается мелким id');
+DB.seq = 100;
+fireSnapshot([{ id: 3, client: 'Cloud3', status: 'new', ts: 2000 }]);
+assert.eq(DB.seq, 100, 'snapshot: seq не понижается, если локально больше');
+assert.eq(bumpSeqToMaxOrderId(), 100, 'bumpSeqToMaxOrderId: идемпотентен');
+
 // --- 10. Регрессия: без firebase — тихий локальный режим ---
 
 var savedFb = globalThis.firebase;

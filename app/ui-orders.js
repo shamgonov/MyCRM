@@ -360,6 +360,10 @@ function renderOrderTeamBlock(o, editable) {
   if (editable && can('order_assign')) {
     actions += '<button class="btn" data-add-helper="' + o.id + '" style="margin-top:8px">＋ Соисполнитель</button>';
   }
+  // Отдать в пул: снять назначенного исполнителя с незакрытой заявки.
+  if (o.worker && editable && canReleaseToPool(o)) {
+    actions += '<button class="btn" data-release-pool="' + o.id + '" style="margin-top:8px">🤝 Отдать в пул</button>';
+  }
 
   return '<div class="card info-block">' +
       '<h4>Исполнители</h4>' +
@@ -401,6 +405,31 @@ function applyTakeOrder(id) {
   const res = takeOrder(o);
   if (!res.ok) { toast(res.reason, true); return false; }
   toast('Заявка №' + id + ' взята в работу');
+  render();
+  return true;
+}
+
+// Отдача в пул разрешена, пока заявка не закрыта (деньги/отмена).
+function canReleaseToPool(o) {
+  if (!o || !o.worker) return false;
+  return o.status !== 'completed' && o.status !== 'paid' && o.status !== 'canceled';
+}
+
+// releaseOrderToPool(id): снять исполнителя, заявка снова свободна в пуле.
+function releaseOrderToPool(id) {
+  const o = findOrderById(id);
+  if (!o) return false;
+  if (!canReleaseToPool(o)) { toast('Отдача в пул недоступна', true); return false; }
+  o.worker = null;
+  o.takenAt = null;
+  o.takenBy = null;
+  normalizeOrder(o);
+  o.history.push({
+    ts: Date.now(), by: state.user, action: 'release_pool',
+    details: 'Заявка возвращена в общий пул'
+  });
+  saveOrderLocal(o);
+  toast('Заявка №' + id + ' отдана в пул');
   render();
   return true;
 }
@@ -476,6 +505,26 @@ function doFollowUp(id) {
 
 // --- 5. Модалка создания заявки ---
 
+// Опции выбора исполнителя при создании заявки (модалка «Новая заявка»):
+// «в пул» (пусто), «себе», и — для наделённых order_assign — сотрудники из
+// DB.users кроме текущего пользователя (себя выбирают опцией «Себе»).
+function buildWorkerOptions() {
+  const defSelf = state.role === 'worker';
+  let html = '<option value=""' + (defSelf ? '' : ' selected') + '>' +
+    '🤝 В общий пул (без исполнителя)</option>';
+  html += '<option value="self"' + (defSelf ? ' selected' : '') + '>' +
+    '👷 Себе (' + escapeHtml(state.user || '') + ')</option>';
+  if (can('order_assign')) {
+    const names = (DB.users || [])
+      .map(function (u) { return u.name; })
+      .filter(function (n) { return n && n !== state.user; });
+    html += names.map(function (n) {
+      return '<option value="' + escapeHtml(n) + '">👤 ' + escapeHtml(n) + '</option>';
+    }).join('');
+  }
+  return html;
+}
+
 function renderCreateOrderModal() {
   var clients = (DB.clients || []).map(function (c) {
     return '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>';
@@ -483,6 +532,7 @@ function renderCreateOrderModal() {
   showModal(
     '<h3>Новая заявка</h3>' +
     '<label class="field"><span>Контрагент</span><select id="co-client-id"><option value="">— вручную —</option>' + clients + '</select></label>' +
+    '<label class="field"><span>Исполнитель</span><select id="nc-worker">' + buildWorkerOptions() + '</select></label>' +
     '<label class="field"><span>Клиент *</span><input id="nc-client" type="text"></label>' +
     '<label class="field"><span>Телефон</span><input id="nc-phone" type="tel"></label>' +
     '<label class="field"><span>Адрес</span><input id="nc-address" type="text"></label>' +
@@ -624,6 +674,13 @@ document.addEventListener('click', function (ev) {
     return;
   }
 
+  // «Отдать в пул» стоит ВНУТРИ карточки [data-order] — проверяем до перехода.
+  const releaseBtn = sel('[data-release-pool]');
+  if (releaseBtn) {
+    releaseOrderToPool(Number(releaseBtn.getAttribute('data-release-pool')));
+    return;
+  }
+
   const card = sel('[data-order]');
   if (card) { ORD_TAB = 'main'; go('order', Number(card.getAttribute('data-order'))); return; }
 
@@ -655,13 +712,19 @@ document.addEventListener('click', function (ev) {
       t1: val('nc-t1'),
       t2: val('nc-t2')
     };
-    // Конфликт проверяем по текущему пользователю (он станет worker после назначения).
-    data.worker = state.user;
-    const conflicts = (typeof checkTimeConflict === 'function') ? checkTimeConflict(data) : [];
-    if (conflicts.length) {
-      window.__calPending = data; // «Всё равно взять» доукомплектует через finishCreateOrder
-      showConflictModal(conflicts, data);
-      return;
+    // Исполнитель из модалки: пусто → общий пул, 'self' → текущий пользователь,
+    // иначе — выбранное имя (опции для других доступны только с order_assign).
+    const w = (document.getElementById('nc-worker') || {}).value || '';
+    data.worker = (w === 'self') ? state.user : (w ? w : null);
+    // Конфликт по времени ищем только для назначенного исполнителя;
+    // заявка в пуле свободна — её возьмут позже, слот пока не занят.
+    if (data.worker) {
+      const conflicts = (typeof checkTimeConflict === 'function') ? checkTimeConflict(data) : [];
+      if (conflicts.length) {
+        window.__calPending = data; // «Всё равно взять» доукомплектует через finishCreateOrder
+        showConflictModal(conflicts, data);
+        return;
+      }
     }
     saveOrderWithClient(data);
     closeModal();
