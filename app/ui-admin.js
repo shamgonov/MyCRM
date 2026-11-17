@@ -27,9 +27,9 @@ function arow(cells, head, cols) {
     '</div>';
 }
 
-const COLS_EMP = '1.2fr 1.3fr 1fr .9fr .5fr';
-const COLS_PRICE = '1.6fr 1fr .8fr .6fr 1fr';
-const COLS_SUPP = '1.4fr 1fr 1.3fr .9fr .8fr';
+const COLS_EMP = 'minmax(80px, 1.2fr) minmax(80px, 1.3fr) minmax(60px, 1fr) minmax(60px, .9fr) minmax(40px, .5fr)';
+const COLS_PRICE = 'minmax(100px, 1.6fr) minmax(60px, 1fr) minmax(50px, .8fr) minmax(40px, .6fr) minmax(60px, 1fr)';
+const COLS_SUPP = 'minmax(90px, 1.4fr) minmax(70px, 1fr) minmax(80px, 1.3fr) minmax(60px, .9fr) minmax(50px, .8fr)';
 
 // --- 2. Сотрудники ---
 

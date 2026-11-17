@@ -108,6 +108,11 @@ function goBack() {
 function render() {
   const app = document.getElementById('app');
   if (!app) return;
+  // Этап 26: padding-bottom гарантируется, чтобы контент не перекрывался
+  // нижней навигацией. Гард обязателен: в смоуках #app — стаб без style.
+  if (app.style) {
+    app.style.paddingBottom = 'calc(var(--nav-h) + 8px + env(safe-area-inset-bottom))';
+  }
   const fn = S[state.screen] || S.login;
   // Баннер статуса облачного доступа (Этап 14-B) — над содержимым экрана.
   const banner = (typeof renderAccessBanner === 'function') ? renderAccessBanner() : '';

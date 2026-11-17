@@ -33,7 +33,13 @@
 
 * { box-sizing: border-box; }
 
-html, body { margin: 0; padding: 0; }
+html, body {
+  margin: 0;
+  padding: 0;
+  /* Этап 26: контент не должен «ездить» по горизонтали на телефоне */
+  overflow-x: hidden;
+  max-width: 100vw;
+}
 
 body {
   background: var(--bg);
@@ -44,9 +50,13 @@ body {
 }
 
 #app {
-  max-width: 720px;
+  /* Этап 26: min() сохраняет центрирование 720px на десктопе и
+     растяжение на телефоне; env() покрывает safe-area iPhone. */
+  max-width: min(720px, 100%);
   margin: 0 auto;
-  padding: 12px 12px calc(var(--nav-h) + 24px);
+  padding: 12px 12px calc(var(--nav-h) + 8px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  box-sizing: border-box;
 }
 
 h1, h2, h3 { line-height: 1.25; margin: 0 0 8px; }
@@ -59,7 +69,40 @@ a:hover { text-decoration: underline; }
 
 .muted { color: var(--muted); }
 .small { font-size: 13px; }
-.row { display: flex; gap: 8px; align-items: center; }
+/* --- Мобильная оптимизация (Этап 26) --- */
+.row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.row > .btn {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.arow, .rrow, .mrow {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  min-width: 0;
+}
+
+.card, .list-item {
+  max-width: 100%;
+  overflow-x: hidden;
+  word-wrap: break-word;
+}
+
+.chips {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-wrap: nowrap;
+}
+
+.chips > .chip, .chips > .btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
 .spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 
 /* --- Карточки --- */
@@ -198,18 +241,21 @@ input:focus, select:focus, textarea:focus {
 
 .nav-scroll {
   position: relative;
-  display: flex; gap: 4px;
-  overflow-x: auto; overflow-y: hidden;
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0 10px 4px;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior-x: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--accent) var(--card);
+  /* Этап 26: flex-start вместо центрирования margin'ами — иначе при
+     переполнении начало ленты обрезается, а margin auto конфликтует
+     с overflow-x: auto (пропадает скролл до первого пункта). */
+  justify-content: flex-start;
 }
-/* Центрируем, когда пунктов мало; при переполнении не режем начало */
-.nav-scroll > :first-child { margin-left: auto; }
-.nav-scroll > :last-child  { margin-right: auto; }
 .nav-scroll::-webkit-scrollbar { height: 4px; }
 .nav-scroll::-webkit-scrollbar-track { background: var(--card); border-radius: 999px; }
 .nav-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
