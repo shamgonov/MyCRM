@@ -147,7 +147,7 @@ c3.orderIds.push(901);
 var cardHtml = renderClientCard(c3);
 assert(cardHtml.indexOf('data-new-order-from-client="' + c3.id + '"') >= 0,
   '4: кнопка «➕ Новая заявка»');
-assert(cardHtml.indexOf('data-import-contact') >= 0, '4: кнопка «📥 Из телефонной книги»');
+assert(cardHtml.indexOf('data-import-contact') >= 0, '4: кнопка импорта');
 assert(cardHtml.indexOf('Журнал заявок') >= 0, '4: блок «Журнал заявок»');
 assert(cardHtml.indexOf('data-order="901"') >= 0, '4: элемент журнала с data-order');
 assert(cardHtml.indexOf('5 000') >= 0 || cardHtml.indexOf('5000') >= 0,
@@ -182,13 +182,13 @@ assert.eq(FIELDS['nc-phone'].value, c3.phone, '5: телефон предзап�
 assert(FIELDS['nc-address'].value.indexOf('Мира') >= 0, '5: адрес предзаполнен');
 assert.eq(FIELDS['co-client-id'].value, String(c3.id), '5: контрагент выбран в select');
 
-// --- 6. Импорт: парсер текста ---
+// --- 6. Импорт: парсер текста (Этап 32: форматы и ключевые слова) ---
 
-var parsed = parseContactText('Иван\n+79001234567\nМосква');
+var parsed = parseContactText('Иван\n+79001234567\nул. Мира, дом 10');
 assert.eq(parsed.name, 'Иван', '6: имя из первой не-телефонной строки');
 assert.eq(parsed.phone, '+79001234567', '6: телефон из строки с цифрами');
-assert.eq(parsed.address, 'Москва', '6: адрес из третьей строки');
-// Порядок строк не важен: телефон ищётся по цифрам.
+assert.eq(parsed.address, 'ул. Мира, дом 10', '6: адрес по ключевому слову «ул.»');
+// Порядок строк не важен: телефон ищется по формату.
 var p2 = parseContactText('+79001234567\nПетр');
 assert.eq(p2.phone, '+79001234567', '6: телефон первой строкой');
 assert.eq(p2.name, 'Петр', '6: имя второй строкой');
@@ -196,32 +196,54 @@ assert.eq(p2.name, 'Петр', '6: имя второй строкой');
 var p3 = parseContactText('');
 assert.eq(p3.name, '', '6: пусто → имя пусто');
 
-// --- 6.1 Фолбэк-модалка: navigator.contacts нет → importFromPhone не падает ---
+// --- 6.1 Модалка источника (Этап 32): navigator.contacts нет → importFromPhone не падает ---
 
 modalStub.innerHTML = '';
 var noThrow = true;
 try { importFromPhone(); } catch (e) { noThrow = false; }
 assert(noThrow, '6.1: без navigator.contacts — без исключения');
-assert(modalStub.innerHTML.indexOf('pc-text') >= 0, '6.1: открыта фолбэк-модалка (pc-text)');
-assert(modalStub.innerHTML.indexOf('data-paste-contact') >= 0,
-  '6.1: кнопка «Распознать» (data-paste-contact)');
+assert(modalStub.innerHTML.indexOf('data-contact-paste') >= 0,
+  '6.1: кнопка «📋 Вставить из буфера» (data-contact-paste)');
+assert(modalStub.innerHTML.indexOf('data-contact-manual') >= 0,
+  '6.1: кнопка «✏️ Ввести вручную» (data-contact-manual)');
 assert(modalStub.innerHTML.indexOf('onclick') < 0, '6.1: инлайн-обработчиков нет');
 
-// Клик «Распознать» → addClient + переход в карточку.
+// «✏️ Ввести вручную» → обычная форма создания контрагента.
+clickOn('data-contact-manual');
+assert(modalStub.innerHTML.indexOf('cl-name') >= 0,
+  '6.1: «Ввести вручную» открыла форму контрагента (cl-name)');
+
+// «📋 Вставить из буфера» → модалка вставки текста.
+clickOn('data-contact-paste');
+assert(modalStub.innerHTML.indexOf('pc-text') >= 0, '6.1: модалка вставки (pc-text)');
+assert(modalStub.innerHTML.indexOf('data-paste-contact') >= 0,
+  '6.1: кнопка «Распознать» (data-paste-contact)');
+
+// «Распознать» → превью (pv-*), но НЕ создание (Этап 32).
 DB.clients = [];
-FIELDS['pc-text'] = { value: 'Иван\n+79001234567\nМосква' };
+FIELDS['pc-text'] = { value: 'Иван\n+79001234567\nул. Мира, дом 10' };
 CL_TAB = 'list';
 state.clientId = null;
 clickOn('data-paste-contact');
-assert.eq(DB.clients.length, 1, '6.1: карточка создана из вставленного текста');
+assert.eq(DB.clients.length, 0, '6.1: до подтверждения превью клиент не создан');
+assert(modalStub.innerHTML.indexOf('pv-name') >= 0, '6.1: превью с pv-name');
+assert(modalStub.innerHTML.indexOf('pv-phone') >= 0, '6.1: превью с pv-phone');
+assert(modalStub.innerHTML.indexOf('pv-address') >= 0, '6.1: превью с pv-address');
+
+// «💾 Сохранить» в превью → addClient + переход в карточку.
+FIELDS['pv-name'] = { value: 'Иван' };
+FIELDS['pv-phone'] = { value: '+79001234567' };
+FIELDS['pv-address'] = { value: 'ул. Мира, дом 10' };
+clickOn('data-save-preview');
+assert.eq(DB.clients.length, 1, '6.1: карточка создана из превью');
 var imported = DB.clients[0];
-assert.eq(imported.name, 'Иван', '6.1: имя из текста');
-assert.eq(imported.phone, '+79001234567', '6.1: телефон из текста');
-assert.eq(imported.address, 'Москва', '6.1: адрес из текста');
+assert.eq(imported.name, 'Иван', '6.1: имя из превью');
+assert.eq(imported.phone, '+79001234567', '6.1: телефон из превью');
+assert.eq(imported.address, 'ул. Мира, дом 10', '6.1: адрес из превью');
 assert.eq(CL_TAB, 'card', '6.1: открыта карточка импортированного');
 assert.eq(state.clientId, imported.id, '6.1: state.clientId установлен');
 
-// --- 6.2 Contact Picker API доступен → берётся имя/телефон контакта ---
+// --- 6.2 Contact Picker API доступен → модалка источника НЕ открывается ---
 
 globalThis.navigator = {
   contacts: {
@@ -232,12 +254,14 @@ globalThis.navigator = {
 };
 DB.clients = [];
 CL_TAB = 'list';
+modalStub.innerHTML = '';
 importFromPhone();
-// then-колбэк асинхронный: прокручиваем микрозадачи синхронным then-циклом
-// невозможно (раннер не ждёт промисы) — проверяем сам факт отсутствия модалки
-// фолбэка (API есть → модалка вставки НЕ открывается).
+// then-колбэк асинхронный (раннер не ждёт промисы): синхронно проверяем,
+// что API есть → ни модалка источника, ни модалка вставки НЕ открыты.
+assert(modalStub.innerHTML.indexOf('data-contact-paste') < 0,
+  '6.2: с доступным API модалка источника не открывается');
 assert(modalStub.innerHTML.indexOf('pc-text') < 0,
-  '6.2: с доступным API фолбэк-модалка не открывается');
+  '6.2: с доступным API модалка вставки не открывается');
 globalThis.navigator = {};
 
 // --- 7. Регрессия: absence navigator вообще (старые окружения) ---
@@ -247,7 +271,7 @@ var noThrow2 = true;
 modalStub.innerHTML = '';
 try { importFromPhone(); } catch (e) { noThrow2 = false; }
 assert(noThrow2, '7: без navigator — importFromPhone не падает');
-assert(modalStub.innerHTML.indexOf('pc-text') >= 0, '7: открыт фолбэк');
+assert(modalStub.innerHTML.indexOf('data-contact-paste') >= 0, '7: открыта модалка источника');
 globalThis.navigator = {};
 
 // --- 9. Этап 31: вкладки экрана + вкладка «🚚 Поставщики» ---
@@ -267,9 +291,9 @@ var supHtml = renderClients();
 assert(supHtml.indexOf('Поставщики') >= 0, '9.2: экран поставщиков отрисован');
 assert(supHtml.indexOf('data-add-supplier') >= 0, '9.2: кнопка «➕ Поставщик»');
 
-// 9.3 Кнопка импорта переименована (Этап 31).
+// 9.3 Кнопка импорта переименована (Этап 32).
 var cardImp = renderClientCard(mkClient({ id: 777, name: 'ИмпортТест' }));
-assert(cardImp.indexOf('📥 Импорт / Вставить') >= 0, '9.3: подпись «📥 Импорт / Вставить»');
+assert(cardImp.indexOf('📥 Добавить из контактов') >= 0, '9.3: подпись «📥 Добавить из контактов»');
 assert(cardImp.indexOf('data-import-contact') >= 0, '9.3: data-import-contact на месте');
 
 // 9.4 Полный цикл создания поставщика через модалку ui-admin.js.

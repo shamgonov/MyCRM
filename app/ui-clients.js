@@ -156,7 +156,7 @@ function renderClientCard(c) {
     (can('clients_edit')
       ? '<div class="row" style="margin-top:8px;gap:6px">' +
           '<button class="btn btn-primary" data-new-order-from-client="' + c.id + '" style="flex:1">➕ Новая заявка</button>' +
-          '<button class="btn" data-import-contact style="flex:1">📥 Импорт / Вставить</button>' +
+          '<button class="btn" data-import-contact style="flex:1">📥 Добавить из контактов</button>' +
         '</div>'
       : '') +
     '<div class="card info-block">' +
@@ -257,34 +257,77 @@ function addClient(data, checkDuplicates) {
   return newClient.id;
 }
 
-// --- 5.2 Импорт контрагента из телефонной книги (Этап 30) ---
-// Contact Picker API есть не везде (нет на десктопе и в Firefox) — при
-// недоступности открываем фолбэк-модалку ручного ввода.
+// --- 5.2 Импорт контрагента из телефонной книги (Этап 30, Этап 32) ---
+// Contact Picker API есть не везде (нет на десктопе и в Firefox): при его
+// доступности сразу открываем системный выбор контакта, иначе — модалку с
+// выбором источника: вставка текста из буфера или ручной ввод формы.
 
-// Парсинг вставленного текста: строка с цифрами (>=5) → телефон,
-// первая не-телефонная строка → имя, остальные → адрес.
+// Российские форматы телефонов: +7 900 123-45-67, 8-900-123-45-67,
+// +7(900)123-45-67, +79001234567.
+var CONTACT_PHONE_RE = /(?:\+?7|8)[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}/;
+var ADDRESS_KEYWORDS = ['ул.', 'пр.', 'проспект', 'дом', 'офис', 'кв.', 'квартира'];
+
+// Парсинг вставленного текста (Этап 32): телефон ищется по формату, адрес —
+// по ключевым словам, имя — первая строка без телефона и не адрес.
+// Возвращает {name, phone, address, raw} для превью.
 function parseContactText(txt) {
-  var lines = String(txt || '').split('\n').map(function (l) {
-    return l.trim();
-  }).filter(Boolean);
-  var res = { name: '', phone: '', address: '' };
+  var raw = String(txt || '');
+  var lines = raw.split(/\r?\n/).map(function (l) { return l.trim(); })
+    .filter(Boolean);
+  var res = { name: '', phone: '', address: '', raw: raw };
+  var phoneLine = '';
   lines.forEach(function (l) {
-    var digits = l.replace(/\D/g, '');
-    if (!res.phone && digits.length >= 5 && /\d/.test(l)) { res.phone = l; return; }
-    if (!res.name) { res.name = l; return; }
-    res.address = res.address ? res.address + ', ' + l : l;
+    if (res.phone) return;
+    var m = l.match(CONTACT_PHONE_RE);
+    if (!m) return;
+    phoneLine = l;
+    var digits = m[0].replace(/[\s-()]/g, '');
+    if (digits.charAt(0) === '8') digits = '+7' + digits.slice(1);
+    else if (digits.charAt(0) === '7') digits = '+' + digits;
+    res.phone = digits;
+  });
+  lines.forEach(function (l) {
+    if (res.address || l === phoneLine) return;
+    var low = l.toLowerCase();
+    for (var i = 0; i < ADDRESS_KEYWORDS.length; i++) {
+      if (low.indexOf(ADDRESS_KEYWORDS[i]) >= 0) { res.address = l; return; }
+    }
+  });
+  lines.forEach(function (l) {
+    if (res.name) return;
+    var m = l.match(/^(?:имя|name)\s*[:\-]\s*(.+)$/i);
+    if (m) { res.name = m[1].trim(); return; }
+    if (l === phoneLine || l === res.address) return;
+    if (CONTACT_PHONE_RE.test(l)) return;
+    res.name = l;
   });
   return res;
 }
 
+// Модалка выбора источника при недоступном Contact Picker API (Этап 32).
+function renderContactSourceModal() {
+  showModal(
+    '<h3>📥 Добавить из контактов</h3>' +
+    '<p class="small muted">Нативный выбор контактов недоступен в этом ' +
+      'браузере. Выберите, откуда взять данные контакта.</p>' +
+    '<div class="row" style="gap:6px">' +
+      '<button class="btn btn-primary" data-contact-paste style="flex:1">📋 Вставить из буфера</button>' +
+      '<button class="btn" data-contact-manual style="flex:1">✏️ Ввести вручную</button>' +
+    '</div>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+    '</div>'
+  );
+}
+
 function renderPasteContactModal() {
   showModal(
-    '<h3>📥 Контрагент из телефонной книги</h3>' +
-    '<p class="small muted">Нативный выбор контактов недоступен в этом браузере. ' +
-      'Вставьте данные вручную — по строке на значение.</p>' +
+    '<h3>📋 Вставить данные контакта</h3>' +
+    '<p class="small muted">Вставьте скопированный контакт — формат ' +
+      'распознается автоматически (телефон, адрес, имя).</p>' +
     '<label class="field"><span>Данные контакта</span>' +
       '<textarea id="pc-text" rows="4" ' +
-        'placeholder="Иван\n+79001234567\nМосква"></textarea></label>' +
+        'placeholder="Иван&#10;+7 900 123-45-67&#10;ул. Мира, дом 10"></textarea></label>' +
     '<div class="row">' +
       '<button class="btn" data-close style="flex:1">Отмена</button>' +
       '<button class="btn btn-primary" data-paste-contact style="flex:1">Распознать</button>' +
@@ -292,44 +335,46 @@ function renderPasteContactModal() {
   );
 }
 
-// Открытие выбора контакта; при отказе/недоступности API — фолбэк-модалка.
+// Превью распознанных данных перед сохранением (Этап 32): поля редактируемы.
+function renderContactPreviewModal(parsed) {
+  var p = parsed || {};
+  showModal(
+    '<h3>📇 Проверьте данные</h3>' +
+    '<label class="field"><span>Имя</span>' +
+      '<input id="pv-name" type="text" value="' + escapeHtml(p.name || '') + '"></label>' +
+    '<label class="field"><span>Телефон</span>' +
+      '<input id="pv-phone" type="tel" value="' + escapeHtml(p.phone || '') + '"></label>' +
+    '<label class="field"><span>Адрес</span>' +
+      '<input id="pv-address" type="text" value="' + escapeHtml(p.address || '') + '"></label>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-save-preview style="flex:1">💾 Сохранить</button>' +
+    '</div>'
+  );
+}
+
+// Открытие выбора контакта; при отказе/недоступности API — модалка источника.
 function importFromPhone() {
   if (typeof navigator === 'undefined' || !navigator.contacts ||
       typeof navigator.contacts.select !== 'function') {
-    renderPasteContactModal();
+    renderContactSourceModal();
     return;
   }
   try {
     var p = navigator.contacts.select(['name', 'tel'], { multiple: false });
-    if (!p || typeof p.then !== 'function') { renderPasteContactModal(); return; }
+    if (!p || typeof p.then !== 'function') { renderContactSourceModal(); return; }
     p.then(function (list) {
       var ct = list && list.length ? list[0] : null;
       if (!ct) return; // пользователь отменил выбор
       var name = (ct.name && ct.name.length) ? ct.name[0] : '';
       var phone = (ct.tel && ct.tel.length) ? ct.tel[0] : '';
-      if (!name && !phone) { renderPasteContactModal(); return; }
-      finishImportContact({ name: name, phone: phone, address: '' });
-    })['catch'](function () { renderPasteContactModal(); });
+      if (!name && !phone) { renderContactSourceModal(); return; }
+      // Этап 32: системный контакт тоже проходит через превью.
+      renderContactPreviewModal({ name: name, phone: phone, address: '' });
+    })['catch'](function () { renderContactSourceModal(); });
   } catch (e) {
-    renderPasteContactModal();
+    renderContactSourceModal();
   }
-}
-
-// Создание карточки по распознанным данным + переход в неё.
-function finishImportContact(data) {
-  if (!data || !data.name) { toast('Не удалось распознать имя', true); return false; }
-  if (typeof can === 'function' && !can('clients_edit')) {
-    toast('Нет права создавать контрагентов', true);
-    return false;
-  }
-  var id = addClient({ name: data.name, phone: data.phone || '', address: data.address || '' }, true);
-  if (id === null) { closeModal(); return false; }
-  closeModal();
-  CL_TAB = 'card';
-  state.clientId = id;
-  toast('Контрагент добавлен');
-  render();
-  return true;
 }
 
 // --- 6. Досье: собирает все телефоны/адреса из заявок ---
@@ -392,11 +437,52 @@ document.addEventListener('click', function (ev) {
   var importBtn = sel('[data-import-contact]');
   if (importBtn) { importFromPhone(); return; }
 
-  // «Распознать» в фолбэк-модалке ручного ввода контакта.
+  // Модалка выбора источника (Этап 32): вставка из буфера / ручной ввод.
+  var srcPasteBtn = sel('[data-contact-paste]');
+  if (srcPasteBtn) { renderPasteContactModal(); return; }
+
+  var srcManualBtn = sel('[data-contact-manual]');
+  if (srcManualBtn) { renderClientEditModal(); return; }
+
+  // «Распознать» в модалке вставки: парсинг → превью (Этап 32),
+  // сохранение — отдельным делегатом data-save-preview.
   var pasteBtn = sel('[data-paste-contact]');
   if (pasteBtn) {
     var ta = document.getElementById('pc-text');
-    finishImportContact(parseContactText(ta ? ta.value : ''));
+    var parsed = parseContactText(ta ? ta.value : '');
+    if (!parsed.name && !parsed.phone) {
+      toast('Не удалось распознать данные', true);
+      return;
+    }
+    renderContactPreviewModal(parsed);
+    return;
+  }
+
+  // 💾 Сохранение из превью распознанного контакта (Этап 32).
+  var savePreviewBtn = sel('[data-save-preview]');
+  if (savePreviewBtn) {
+    var pvVal = function (id) {
+      var el = document.getElementById(id);
+      return el ? el.value.trim() : '';
+    };
+    var pvName = pvVal('pv-name');
+    var pvPhone = pvVal('pv-phone');
+    var pvAddress = pvVal('pv-address');
+    if (!pvName && !pvPhone) { toast('Укажите имя или телефон', true); return; }
+    if (typeof can === 'function' && !can('clients_edit')) {
+      toast('Нет права создавать контрагентов', true);
+      return;
+    }
+    // Имя обязательно для карточки: если распознан только телефон — он и имя.
+    var pvId = addClient({
+      name: pvName || pvPhone, phone: pvPhone, address: pvAddress, kind: 'person'
+    }, true);
+    if (pvId === null) return; // дубль отклонён пользователем
+    closeModal();
+    state.clientId = pvId;
+    CL_TAB = 'card';
+    toast('Контакт добавлен');
+    render();
     return;
   }
 
@@ -485,5 +571,6 @@ window.buildClientDossier = buildClientDossier;
 window.addClient = addClient;
 window.importFromPhone = importFromPhone;
 window.parseContactText = parseContactText;
+window.renderContactSourceModal = renderContactSourceModal;
 window.renderPasteContactModal = renderPasteContactModal;
-window.finishImportContact = finishImportContact;
+window.renderContactPreviewModal = renderContactPreviewModal;
