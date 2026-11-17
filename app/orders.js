@@ -5,7 +5,7 @@
 
 const ORDER_STATUSES = [
   'new', 'inspection', 'estimate', 'approved', 'inwork', 'paused',
-  'waiting', 'postponed', 'completed', 'paid', 'canceled'
+  'waiting', 'postponed', 'transfer', 'completed', 'paid', 'canceled'
 ];
 
 // Локации материала (Этап 18): багажник / поставщик / склад / у заказчика.
@@ -16,15 +16,18 @@ const MAT_PLACE_LABELS = {
 };
 
 // Матрица переходов (SPEC: статусы и переходы, включая ветку C без осмотра).
+// Этап 28: статус 'transfer' — перенос заявки на другое время; вход из всех
+// рабочих статусов, выход обратно в любой рабочий (+ отмена).
 const STATUS_TRANSITIONS = {
-  new: ['inspection', 'approved', 'postponed', 'canceled'],        // + Этап 19: postponed из new
-  inspection: ['estimate', 'canceled'],               // осмотрщик составил смету
-  estimate: ['approved', 'postponed', 'canceled'],    // клиент согласовал | отложил | отмена
-  approved: ['inwork', 'canceled'],                   // назначен worker, тот принял
-  inwork: ['paused', 'completed', 'canceled', 'postponed'],  // Q4: перенос остатка
+  new: ['inspection', 'approved', 'postponed', 'transfer', 'canceled'],        // + Этап 19: postponed из new
+  inspection: ['estimate', 'transfer', 'canceled'],               // осмотрщик составил смету
+  estimate: ['approved', 'postponed', 'transfer', 'canceled'],    // клиент согласовал | отложил | отмена
+  approved: ['inwork', 'transfer', 'canceled'],                   // назначен worker, тот принял
+  inwork: ['paused', 'completed', 'canceled', 'postponed', 'transfer'],  // Q4: перенос остатка
   paused: ['inwork', 'canceled'],                     // возобновить
   waiting: ['inwork', 'canceled'],
   postponed: ['estimate', 'approved', 'canceled'],    // возврат после отложения
+  transfer: ['new', 'inspection', 'estimate', 'approved', 'inwork', 'canceled'], // Этап 28
   completed: ['paid', 'canceled'],
   paid: [],
   canceled: []
@@ -133,6 +136,29 @@ function transitionOrder(id, newStatus, reason) {
     from: old,
     to: newStatus,
     reason: reason || ''
+  });
+  saveOrderLocal(o);
+  return true;
+}
+
+// --- Перенос заявки на другое время (Этап 28) ---
+
+// transferOrder(o, data): переносит заявку на новую дату/время и переводит в
+// статус 'transfer'. data: { date, t1, t2, reason? }. Возвращает true при успехе.
+function transferOrder(o, data) {
+  if (!o || !data || !data.date) return false;
+  if (typeof canEditOrder === 'function' && !canEditOrder(o)) return false;
+  if (o.status === 'completed' || o.status === 'paid' || o.status === 'canceled') return false;
+  normalizeOrder(o);
+  const oldDate = o.date + ' ' + (o.t1 || '') + '-' + (o.t2 || '');
+  o.date = String(data.date);
+  o.t1 = String(data.t1 || '');
+  o.t2 = String(data.t2 || '');
+  o.status = 'transfer';
+  const reason = data.reason ? ' Причина: ' + String(data.reason) : '';
+  o.history.push({
+    ts: Date.now(), by: state.user, action: 'transfer',
+    details: 'Перенесено с ' + oldDate + ' на ' + o.date + ' ' + o.t1 + '-' + o.t2 + reason
   });
   saveOrderLocal(o);
   return true;

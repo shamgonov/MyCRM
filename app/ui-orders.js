@@ -6,6 +6,7 @@
 const STATUS_LABELS = {
   new: 'Новая', inspection: 'Осмотр', estimate: 'Смета', approved: 'Согласована',
   inwork: 'В работе', paused: 'Пауза', waiting: 'Ожидание', postponed: 'Отложена',
+  transfer: '📅 Перенос',
   completed: 'Завершена', paid: 'Оплачена', canceled: 'Отменена'
 };
 
@@ -173,18 +174,32 @@ function renderOrderCard(id) {
 
 // Журнал (история) — читаем сразу, она простая.
 function renderOrderTabJournal(o) {
-  const rows = (o.history || []).slice().reverse().map(function (h) {
-    const d = new Date(h.ts);
+  // Этап 28: полная хронология действий — сортировка от новых к старым,
+  // иконка по типу события, автор и время.
+  const ICONS = {
+    status: '🔄', take: '✋', assign_worker: '👷', assign_helper: '👷',
+    confirm_helper: '🤝', release_pool: '🤝', call_result: '📞', transfer: '📅',
+    followup: '🔁', inherit: '🧬', payment: '💳', tag: '🏷', create: '➕'
+  };
+  const rows = (o.history || []).slice().sort(function (a, b) {
+    return (Number(b.ts) || 0) - (Number(a.ts) || 0);
+  }).map(function (h) {
+    const d = new Date(Number(h.ts) || 0);
     const p2 = function (n) { return n < 10 ? '0' + n : '' + n; };
-    const when = p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + ' ' + p2(d.getHours()) + ':' + p2(d.getMinutes());
+    const when = p2(d.getDate()) + '.' + p2(d.getMonth() + 1) + ' ' +
+      p2(d.getHours()) + ':' + p2(d.getMinutes());
     let text = h.action === 'status'
       ? 'Статус: ' + (STATUS_LABELS[h.from] || h.from) + ' → ' + (STATUS_LABELS[h.to] || h.to)
       : (h.details || h.action);
-    if (h.reason) text += ' (' + escapeHtml(h.reason) + ')';
-    return '<div class="est-row"><span>' + escapeHtml(text) +
+    if (h.reason) text += ' (' + h.reason + ')';
+    const icon = ICONS[h.action] || '•';
+    return '<div class="est-row"><span>' + icon + ' ' + escapeHtml(text) +
       '</span><span class="small muted">' + when + ' · ' + escapeHtml(h.by || '') + '</span></div>';
   });
-  return '<div class="card">' + (rows.join('') || '<p class="muted">Пусто.</p>') + '</div>';
+  return '<div class="card">' +
+    '<h4>Хронология заявки</h4>' +
+    (rows.join('') || '<p class="muted">История пуста.</p>') +
+  '</div>';
 }
 
 // --- 3. Вкладка «Основное» ---
@@ -220,6 +235,14 @@ function renderOrderTabMain(o) {
       ? '<div class="card" style="margin-top:8px">' +
           '<button class="btn btn-block" data-call-result="start">' +
             '📞 Итог звонка</button>' +
+        '</div>'
+      : '') +
+    // Перенос на другое время (Этап 28): из любого рабочего статуса.
+    (editable && o.status !== 'completed' && o.status !== 'paid' &&
+      o.status !== 'canceled' && o.status !== 'transfer'
+      ? '<div class="card" style="margin-top:8px">' +
+          '<button class="btn btn-block" data-transfer-order="' + o.id + '">' +
+            '📅 Перенести</button>' +
         '</div>'
       : '') +
     renderOrderTagsBlock(o, editable) +
@@ -434,6 +457,51 @@ function renderOrderTeamBlock(o, editable) {
 // Заявка по id (общий поиск для обработчиков карточки).
 function findOrderById(id) {
   return (DB.orders || []).find(function (x) { return x.id === id; }) || null;
+}
+
+// --- Перенос заявки на другое время (Этап 28) ---
+
+function renderTransferModal(o) {
+  if (!o) return;
+  showModal(
+    '<h3>📅 Перенос заявки №' + orderDisplayNumber(o) + '</h3>' +
+    '<p class="small muted">Текущая дата: <b>' + escapeHtml(o.date) +
+      ' ' + escapeHtml(o.t1 || '') + '-' + escapeHtml(o.t2 || '') + '</b></p>' +
+    '<label class="field"><span>Новая дата *</span>' +
+      '<input id="tr-date" type="date" value="' + escapeHtml(o.date) + '"></label>' +
+    '<div class="row">' +
+      '<label class="field" style="flex:1"><span>Время с</span>' +
+        '<input id="tr-t1" type="time" value="' + escapeHtml(o.t1 || '') + '"></label>' +
+      '<label class="field" style="flex:1"><span>Время по</span>' +
+        '<input id="tr-t2" type="time" value="' + escapeHtml(o.t2 || '') + '"></label>' +
+    '</div>' +
+    '<label class="field"><span>Причина (необязательно)</span>' +
+      '<textarea id="tr-reason" rows="2" placeholder="Клиент попросил перенести..."></textarea></label>' +
+    '<div class="row">' +
+      '<button class="btn" data-close style="flex:1">Отмена</button>' +
+      '<button class="btn btn-primary" data-save-transfer="' + o.id + '" style="flex:1">Перенести</button>' +
+    '</div>'
+  );
+}
+
+// Применить перенос из модалки: собрать поля и вызвать transferOrder.
+function applyTransferFromModal(id) {
+  const o = findOrderById(Number(id));
+  if (!o) return false;
+  const val = function (fid) {
+    const el = document.getElementById(fid);
+    return el ? String(el.value).trim() : '';
+  };
+  const date = val('tr-date');
+  if (!date) { toast('Укажите дату', true); return false; }
+  if (!transferOrder(o, { date: date, t1: val('tr-t1'), t2: val('tr-t2'), reason: val('tr-reason') })) {
+    toast('Не удалось перенести заявку', true);
+    return false;
+  }
+  closeModal();
+  toast('Заявка перенесена на ' + date);
+  render();
+  return true;
 }
 
 // Взять заявку: спереди проверка слота, иначе мягкая модалка конфликта (как в календаре).
@@ -753,6 +821,19 @@ document.addEventListener('click', function (ev) {
       return;
     }
     renderCallResultModal(o);
+    return;
+  }
+
+  // Перенос заявки (Этап 28): кнопка на «Основном» + сохранение из модалки.
+  const transferBtn = sel('[data-transfer-order]');
+  if (transferBtn) {
+    const o = findOrderById(Number(transferBtn.getAttribute('data-transfer-order')));
+    if (o) renderTransferModal(o);
+    return;
+  }
+  const saveTransferBtn = sel('[data-save-transfer]');
+  if (saveTransferBtn) {
+    applyTransferFromModal(saveTransferBtn.getAttribute('data-save-transfer'));
     return;
   }
 
