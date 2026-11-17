@@ -280,6 +280,7 @@ function saveRequisitesFromForm() {
     DB.settings.executorPhys = { name: valOf('req-name'), phone: valOf('req-phone') };
   }
   save();
+  if (typeof settingsSave === 'function') settingsSave();
   return true;
 }
 
@@ -289,6 +290,7 @@ function changeUserRole(userId, newRole) {
   if (!user) return false;
   user.role = newRole;
   save();
+  if (typeof collectionSave === 'function') collectionSave('users', user);
   return true;
 }
 
@@ -298,6 +300,7 @@ function fireEmployee(userId) {
   if (!user) return false;
   user.status = 'fired';
   save();
+  if (typeof collectionSave === 'function') collectionSave('users', user);
   return true;
 }
 
@@ -307,6 +310,7 @@ function deletePriceItem(id) {
   if (idx < 0) return false;
   DB.priceList.splice(idx, 1);
   save();
+  if (typeof collectionDelete === 'function') collectionDelete('priceList', id);
   return true;
 }
 
@@ -334,8 +338,10 @@ document.addEventListener('click', function (ev) {
     const name = valOf('ae-name');
     if (!name) { toast('Укажите имя', true); return; }
     if (!DB.users) DB.users = [];
-    DB.users.push({ id: 'u' + Date.now(), name: name, phone: valOf('ae-phone'), role: valOf('ae-role') || 'worker' });
+    const newEmp = { id: 'u' + Date.now(), name: name, phone: valOf('ae-phone'), role: valOf('ae-role') || 'worker' };
+    DB.users.push(newEmp);
     save();
+    if (typeof collectionSave === 'function') collectionSave('users', newEmp);
     closeModal();
     toast('Сотрудник добавлен');
     render();
@@ -395,14 +401,16 @@ document.addEventListener('click', function (ev) {
       defaultQty: Number(valOf('pr-qty')) || 1
     };
     const eid = window.__priceEdit && window.__priceEdit.id;
+    let saved = data; // для хука: обновлённая позиция либо новая
     if (eid) {
       const existing = DB.priceList.find(function (p) { return Number(p.id) === Number(eid); });
-      if (existing) Object.assign(existing, data);
+      if (existing) { Object.assign(existing, data); saved = existing; }
     } else {
       data.id = Math.max(0, ...DB.priceList.map(function (p) { return Number(p.id) || 0; })) + 1;
       DB.priceList.push(data);
     }
     save();
+    if (typeof collectionSave === 'function') collectionSave('priceList', saved);
     closeModal();
     toast('Прайс сохранён');
     render();

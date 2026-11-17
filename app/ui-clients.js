@@ -209,6 +209,7 @@ document.addEventListener('click', function (ev) {
       if (c) {
         Object.assign(c, clientData);
         save();
+        if (typeof collectionSave === 'function') collectionSave('clients', c);
         toast('Контрагент обновлён');
       }
       closeModal();
@@ -234,6 +235,7 @@ document.addEventListener('click', function (ev) {
     if (!Array.isArray(DB.clients)) DB.clients = [];
     DB.clients.push(newClient);
     save();
+    if (typeof collectionSave === 'function') collectionSave('clients', newClient);
     closeModal();
     state.clientId = newClient.id;
     CL_TAB = 'card';
@@ -256,6 +258,7 @@ document.addEventListener('click', function (ev) {
     var idx = (DB.clients || []).findIndex(function (x) { return x.id === id; });
     if (idx >= 0) DB.clients.splice(idx, 1);
     save();
+    if (typeof collectionDelete === 'function') collectionDelete('clients', id);
     toast('Контрагент удалён');
     CL_TAB = 'list';
     render();

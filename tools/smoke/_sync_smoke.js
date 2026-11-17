@@ -36,7 +36,7 @@ globalThis.toast = function () {};
 // Мок Firebase ДО загрузки sync.js: авто-initSync() при загрузке модуля
 // должен подписаться на мок, а не уйти в локальный режим.
 // Режимы: ok — успех; denied — permission-denied; offline — unavailable.
-var MOCK = { mode: 'ok', ops: [], snapCb: null };
+var MOCK = { mode: 'ok', ops: [], snapCb: null, snapCbs: {}, docSnapCbs: {} };
 function mockThen(fail) {
   return {
     then: function (ok, onErr) {
@@ -54,9 +54,19 @@ globalThis.firebase = {
       enablePersistence: function () {},
       collection: function (name) {
         return {
-          onSnapshot: function (cb) { MOCK.snapCb = cb; return function () {}; },
+          // orders — в MOCK.snapCb (обратная совместимость fireSnapshot),
+          // справочники — в карту snapCbs по имени коллекции.
+          onSnapshot: function (cb) {
+            MOCK.snapCbs[name] = cb;
+            if (name === 'orders') MOCK.snapCb = cb;
+            return function () {};
+          },
           doc: function (id) {
             return {
+              onSnapshot: function (cb) {
+                MOCK.docSnapCbs[name + '/' + id] = cb;
+                return function () {};
+              },
               set: function (data, opts) {
                 MOCK.ops.push({ t: 'set', coll: name, id: id, data: data, opts: opts || {} });
                 if (MOCK.mode === 'denied') return mockThen({ code: 'permission-denied' });
@@ -65,6 +75,12 @@ globalThis.firebase = {
               },
               update: function (data) {
                 MOCK.ops.push({ t: 'update', coll: name, id: id, data: data });
+                if (MOCK.mode === 'denied') return mockThen({ code: 'permission-denied' });
+                if (MOCK.mode === 'offline') return mockThen({ code: 'unavailable' });
+                return mockThen(null);
+              },
+              delete: function () {
+                MOCK.ops.push({ t: 'delete', coll: name, id: id });
                 if (MOCK.mode === 'denied') return mockThen({ code: 'permission-denied' });
                 if (MOCK.mode === 'offline') return mockThen({ code: 'unavailable' });
                 return mockThen(null);

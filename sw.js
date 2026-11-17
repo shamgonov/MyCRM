@@ -2,7 +2,7 @@
    VERSION обновляется tools/deploy.js (не менять вручную). */
 'use strict';
 
-const VERSION = '0.1.1';
+const VERSION = '0.1.2';
 const CACHE = 'crm2-v' + VERSION;
 
 const PRECACHE = [
@@ -46,6 +46,20 @@ self.addEventListener('fetch', (event) => {
           return res;
         })
         .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  // Код приложения и версия — network-first: коллеги сразу видят новый JS/CSS,
+  // кэш служит офлайн-фолбэком (Этап 24).
+  const path = url.pathname;
+  const isCode = /\/app\/[^/]+\.js$/.test(path) || /\/styles\/[^/]+\.css$/.test(path) || /\/version\.json$/.test(path);
+  if (isCode) {
+    event.respondWith(
+      fetch(req).then((res) => {
+        if (res && res.ok) { const clone = res.clone(); caches.open(CACHE).then((c) => c.put(req, clone)); }
+        return res;
+      }).catch(() => caches.match(req))
     );
     return;
   }

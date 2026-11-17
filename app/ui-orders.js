@@ -861,6 +861,7 @@ function saveOrderWithClient(data) {
     if (!Array.isArray(c.orderIds)) c.orderIds = [];
     c.orderIds.push(o.id);
     save();
+    if (typeof collectionSave === 'function') collectionSave('clients', c);
   }
   return o;
 }

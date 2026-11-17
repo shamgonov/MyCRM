@@ -77,6 +77,9 @@ function initSync() {
     return false;
   }
 
+  // Общая база справочников (Этап 24): подписки на clients/suppliers/...
+  startCollectionListeners();
+
   return true;
 }
 
@@ -183,6 +186,8 @@ function pump() {
       p = ref.set(op.data, { merge: true }); // SPEC правило 4
     } else if (op.type === 'patch') {
       p = ref.update(op.data);               // SPEC правило 5
+    } else if (op.type === 'delete') {
+      p = ref.delete();
     } else {
       console.warn('flushQueue: неизвестный тип — ' + op.type);
       p = Promise.resolve(); // пропускаем
@@ -217,6 +222,114 @@ function finishFlush() {
   save(); // фиксируем состояние очереди; вложенный flushQueue пустой — no-op
 }
 
+// --- 4.5 Общая база справочников (Этап 24) ---
+// collections: clients/suppliers/tasks/templates/priceList/users + settings/org.
+// Личные ключи settings (schedule, notifyEnabled, digestShownToday) НЕ синхронизируем.
+
+var SYNC_COLLECTIONS = ['clients', 'suppliers', 'tasks', 'templates', 'priceList', 'users'];
+var SETTINGS_SHARED = ['executorMode', 'executorPhys', 'executorSelfEmployed', 'executorLegal',
+  'rewardPctDefault', 'tagPresets', 'warehouseAddress', 'remindBeforeH', 'docCounter'];
+var SYNC_LOADED = {};
+
+// Личные ключи (schedule, notifyEnabled, digestShownToday) НЕ синхронизируем.
+function settingsSharedSlice() {
+  var out = {};
+  var s = (typeof DB !== 'undefined' && DB && DB.settings) ? DB.settings : {};
+  SETTINGS_SHARED.forEach(function (k) { if (s[k] !== undefined) out[k] = s[k]; });
+  return out;
+}
+
+function collectionSave(name, obj) {
+  if (!obj || obj.id === undefined || obj.id === null) return false;
+  queueOperation({ type: 'save', collection: name, docId: String(obj.id), data: sanitize(obj), ts: Date.now() });
+  return true;
+}
+
+function collectionDelete(name, id) {
+  if (id === undefined || id === null) return false;
+  queueOperation({ type: 'delete', collection: name, docId: String(id), data: {}, ts: Date.now() });
+  return true;
+}
+
+function settingsSave() {
+  queueOperation({ type: 'save', collection: 'settings', docId: 'org', data: sanitize(settingsSharedSlice()), ts: Date.now() });
+  return true;
+}
+
+function pendingOpFor(collection, docId) {
+  var q = (DB && DB.syncQueue) ? DB.syncQueue : [];
+  for (var i = 0; i < q.length; i++) {
+    if (q[i].collection === collection && q[i].docId === docId) return q[i];
+  }
+  return null;
+}
+
+// Первое пустое облако + локальные данные → залить локальное (сид/миграция).
+function seedCollectionUpload(name) {
+  var list = (DB && DB[name]) ? DB[name] : [];
+  list.forEach(function (item) {
+    if (item && item.id !== undefined && item.id !== null) {
+      queueOperation({ type: 'save', collection: name, docId: String(item.id), data: sanitize(item), ts: Date.now() });
+    }
+  });
+}
+
+function applyRemoteCollection(name, docs) {
+  if (!DB) return;
+  if (!Array.isArray(DB[name])) DB[name] = [];
+  if (!SYNC_LOADED[name]) {
+    SYNC_LOADED[name] = true;
+    if (!docs.length && DB[name].length) { seedCollectionUpload(name); return; }
+  }
+  var pending = {};
+  (DB.syncQueue || []).forEach(function (op) {
+    if (op.collection === name) pending[op.docId] = op;
+  });
+  var byId = {};
+  docs.forEach(function (d) {
+    var op = pending[String(d.id)];
+    if (op && Number(d.ts || 0) <= Number(op.ts || 0)) return; // локальная правка свежее
+    byId[String(d.id)] = d;
+  });
+  // Несентые локальные правки живут поверх удалённого снимка.
+  DB[name].forEach(function (local) {
+    var key = String(local.id);
+    var op = pending[key];
+    if (op && op.type !== 'delete') byId[key] = local;
+    if (op && op.type === 'delete') delete byId[key];
+  });
+  DB[name] = Object.keys(byId).map(function (k) { return byId[k]; });
+  save();
+}
+
+function applyRemoteSettings(data) {
+  if (!DB || !data) return;
+  var op = pendingOpFor('settings', 'org');
+  if (op && Number(data.ts || 0) <= Number(op.ts || 0)) return;
+  if (!DB.settings) DB.settings = {};
+  SETTINGS_SHARED.forEach(function (k) {
+    if (data[k] !== undefined) DB.settings[k] = data[k];
+  });
+  save();
+}
+
+function startCollectionListeners() {
+  if (typeof firebase === 'undefined' || !firebase.firestore) return false;
+  var fs = firebase.firestore();
+  SYNC_COLLECTIONS.forEach(function (name) {
+    fs.collection(name).onSnapshot(function (snap) {
+      var docs = [];
+      snap.forEach(function (doc) { docs.push(doc.data()); });
+      applyRemoteCollection(name, docs);
+    }, function (err) { console.warn('sync ' + name + ':', err.code || err.message); });
+  });
+  fs.collection('settings').doc('org').onSnapshot(function (doc) {
+    if (doc.exists) applyRemoteSettings(doc.data());
+    else if (!SYNC_LOADED.settings) { SYNC_LOADED.settings = true; settingsSave(); }
+  }, function (err) { console.warn('sync settings:', err.code || err.message); });
+  return true;
+}
+
 // --- 5. Старт ---
 
 // Возобновление отправки при возвращении сети.
@@ -235,6 +348,13 @@ window.queueOperation = queueOperation;
 window.orderSave = orderSave;
 window.orderPatch = orderPatch;
 window.flushQueue = flushQueue;
+window.collectionSave = collectionSave;
+window.collectionDelete = collectionDelete;
+window.settingsSave = settingsSave;
+window.settingsSharedSlice = settingsSharedSlice;
+window.applyRemoteCollection = applyRemoteCollection;
+window.applyRemoteSettings = applyRemoteSettings;
+window.startCollectionListeners = startCollectionListeners;
 
 // Автозапуск: в браузере с SDK включаем realtime-подписку; без SDK — false,
 // приложение продолжает работать локально (это штатный офлайн-режим).

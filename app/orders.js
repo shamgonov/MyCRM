@@ -419,6 +419,7 @@ function saveTemplate(o, name) {
   };
   DB.templates.push(tpl);
   save();
+  if (typeof collectionSave === 'function') collectionSave('templates', tpl);
   return tpl;
 }
 
@@ -475,6 +476,7 @@ function saveSupplier(data) {
     DB.suppliers.push(s);
   }
   save();
+  if (typeof collectionSave === 'function') collectionSave('suppliers', s);
   return s;
 }
 
@@ -483,6 +485,7 @@ function deleteSupplier(id) {
   if (idx < 0) return false;
   DB.suppliers.splice(idx, 1);
   save();
+  if (typeof collectionDelete === 'function') collectionDelete('suppliers', id);
   return true;
 }
 

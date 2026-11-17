@@ -321,3 +321,9 @@ if (document.readyState === 'loading') {
 } else {
   render();
 }
+
+// Service worker: network-first для кода (см. sw.js). Только на https/localhost.
+if (typeof navigator !== 'undefined' && navigator.serviceWorker &&
+    (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+}

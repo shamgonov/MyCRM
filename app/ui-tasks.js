@@ -54,6 +54,7 @@ function addTask(data) {
   if (!Array.isArray(DB.tasks)) DB.tasks = [];
   DB.tasks.push(t);
   save();
+  if (typeof collectionSave === 'function') collectionSave('tasks', t);
   return t;
 }
 
@@ -68,6 +69,7 @@ function updateTask(id, data) {
   t.orderId = d.orderId ? Number(d.orderId) : null;
   normalizeTask(t);
   save();
+  if (typeof collectionSave === 'function') collectionSave('tasks', t);
   return t;
 }
 
@@ -77,6 +79,7 @@ function toggleTask(id) {
   if (!t) return null;
   t.done = !t.done;
   save();
+  if (typeof collectionSave === 'function') collectionSave('tasks', t);
   return t;
 }
 
@@ -86,6 +89,7 @@ function deleteTask(id) {
   DB.tasks = (DB.tasks || []).filter(function (t) { return String(t.id) !== String(id); });
   if (DB.tasks.length === before) return false;
   save();
+  if (typeof collectionDelete === 'function') collectionDelete('tasks', id);
   return true;
 }
 
