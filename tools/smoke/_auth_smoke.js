@@ -105,6 +105,13 @@ assert.eq(state.role, null, 'logout сбрасывает роль');
 assert.eq(state.user, null, 'logout сбрасывает имя');
 assert.eq(state.screen, 'login', 'logout возвращает на экран входа');
 
+// --- Тестовый режим: сессия crm2_test_user (переживает перезагрузку)
+login('worker', 'Пётр');
+assert.eq(lsGet('crm2_test_user', ''), JSON.stringify({ role: 'worker', name: 'Пётр' }),
+  'login: сессия сохранена в crm2_test_user');
+logout();
+assert.eq(lsGet('crm2_test_user', ''), '', 'logout: сессия очищена');
+
 // --- Этап 14-A: uid-ключ, userRecord, Phone Auth без SDK (мок-ветка) ---
 
 // login принимает третий аргумент — uid Firebase Auth.

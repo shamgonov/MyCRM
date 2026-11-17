@@ -113,3 +113,39 @@ assert(navEl.innerHTML.length > 0, 'renderNavActive() заполнил #nav');
  'admin', 'tasks', 'create', 'profile'].forEach(function (k) {
   assert(typeof S[k] === 'function', 'S.' + k + ' — функция');
 });
+
+// --- Тестовый экран входа: имя + роль, без Phone Auth (реgression-контракт)
+logout();                                  // чистим и state, и сессию
+state.role = null;
+state.screen = 'login';
+render();
+const loginHtml = appEl.innerHTML;
+assert(loginHtml.indexOf('Тестовый режим') >= 0, 'вход: заголовок «CRM2 — Тестовый режим»');
+assert(loginHtml.indexOf('login-name') >= 0, 'вход: поле id="login-name"');
+assert(loginHtml.indexOf('Например: Дмитрий') >= 0, 'вход: placeholder имени');
+assert(loginHtml.indexOf('login-role') >= 0, 'вход: select id="login-role"');
+assert(loginHtml.indexOf('data-test-login') >= 0, 'вход: кнопка data-test-login');
+['admin', 'manager', 'operator', 'worker'].forEach(function (r) {
+  assert(loginHtml.indexOf('value="' + r + '"') >= 0, 'вход: опция роли ' + r);
+});
+assert(loginHtml.indexOf('Владелец (все права)') >= 0, 'вход: подпись роли admin');
+assert(loginHtml.indexOf('Anonymous Auth') >= 0, 'вход: подпись про Anonymous Auth');
+// Phone Auth со screens убран (auth/operation-not-allowed в РФ).
+assert(loginHtml.indexOf('login-phone') < 0, 'вход: поле телефона больше нет');
+assert(loginHtml.indexOf('login-code') < 0, 'вход: поле SMS-кода больше нет');
+assert(loginHtml.indexOf('recaptcha-container') < 0, 'вход: #recaptcha-container убран');
+
+// --- restoreTestSession(): сессия переживает перезагрузку страницы
+assert.eq(lsGet('crm2_test_user', ''), '', 'logout: сессия crm2_test_user очищена');
+state.role = null;
+assert.eq(restoreTestSession(), false, 'restoreTestSession: пусто → false');
+assert.eq(state.role, null, 'restoreTestSession: пусто → остаёмся на входе');
+lsSet('crm2_test_user', JSON.stringify({ role: 'manager', name: 'Ольга' }));
+assert.eq(restoreTestSession(), true, 'restoreTestSession: есть сессия → true');
+assert.eq(state.role, 'manager', 'restoreTestSession: восстановлена роль');
+assert.eq(state.user, 'Ольга', 'restoreTestSession: восстановлено имя');
+assert.eq(state.screen, 'orders', 'restoreTestSession: экран по роли (manager→orders)');
+lsSet('crm2_test_user', 'не-json');
+state.role = null;
+assert.eq(restoreTestSession(), false, 'restoreTestSession: битая запись → false без падения');
+lsSet('crm2_test_user', '');

@@ -151,6 +151,10 @@ function login(role, name, uid) {
   state.uid = uid || null; // Этап 14-A: uid Firebase Auth (null в мок-режиме)
   state.screen = (role === 'worker') ? 'tasks' : 'orders';
   state.navHistory = [];
+  // Тестовый режим: сессия в localStorage для восстановления при F5.
+  try {
+    lsSet('crm2_test_user', JSON.stringify({ role: role, name: name }));
+  } catch (e) { /* localStorage недоступен */ }
 }
 
 function logout() {
@@ -165,6 +169,10 @@ function logout() {
   state.orderId = null;
   state.filter = 'all';
   state.navHistory = [];
+  // Тестовый режим: сессия больше не должна восстанавливаться при F5.
+  try {
+    lsSet('crm2_test_user', '');
+  } catch (e) { /* localStorage недоступен */ }
 }
 
 // --- Этап 14-A: Firebase Phone Auth (compat) ---

@@ -126,33 +126,26 @@ function renderNav() {
   }).join('');
 }
 
-// --- Экран входа (мок: телефон + код, Firebase на Этапе 2) ---
+// --- Экран входа (тестовый режим: имя + роль, без Firebase Phone Auth;
+// Phone Auth недоступен в РФ — auth/operation-not-allowed) ---
 
 function renderLogin() {
   return '<div class="card">' +
-    '<h1>CRM2</h1>' +
-    '<p class="muted">Сервис окон — вход по телефону</p>' +
-    '<label class="field"><span>Телефон</span>' +
-    '<input id="login-phone" type="tel" placeholder="+7 900 000-00-00"></label>' +
-    '<label class="field"><span>Код из SMS</span>' +
-    '<input id="login-code" type="text" inputmode="numeric" placeholder="0000"></label>' +
-    '<button class="btn btn-primary btn-block" data-login>Войти</button>' +
-    // Контейнер reCAPTCHA для signInWithPhoneNumber (невидимый режим).
-    '<div id="recaptcha-container"></div>' +
-    '<p class="small muted">' +
-      (typeof authPhoneAvailable === 'function' && authPhoneAvailable()
-        ? 'Нажмите «Войти» — пришлём код по SMS.'
-        : 'Офлайн-режим: любые телефон и код (4+ знаков).') +
-    '</p>' +
+    '<h1>CRM2 — Тестовый режим</h1>' +
+    '<p class="muted">Сервис окон</p>' +
+    '<label class="field"><span>Ваше имя</span>' +
+    '<input id="login-name" type="text" placeholder="Например: Дмитрий"></label>' +
+    '<label class="field"><span>Роль</span>' +
+    '<select id="login-role">' +
+      '<option value="admin">Владелец (все права)</option>' +
+      '<option value="manager">Менеджер</option>' +
+      '<option value="operator">Оператор</option>' +
+      '<option value="worker">Мастер</option>' +
+    '</select></label>' +
+    '<button class="btn btn-primary btn-block" data-test-login>Войти</button>' +
+    '<p class="small muted">Данные хранятся в браузере. Для общей базы ' +
+      'включите Anonymous Auth в Firebase.</p>' +
     '</div>';
-}
-
-// Мок-обработчик входа: телефон+код → роль/имя (детерминированно для смоука).
-function doLogin(phone, code) {
-  if (!code || String(code).length < 4) return false;
-  const isBoss = /\+?7?900/.test(String(phone));
-  login(isBoss ? 'admin' : 'worker', isBoss ? 'Владелец' : 'Мастер');
-  return true;
 }
 
 // --- Заглушки экранов (наполняются на следующих этапах) ---
@@ -258,37 +251,26 @@ document.addEventListener('click', function (ev) {
   const navBtn = ev.target.closest('[data-nav]');
   if (navBtn) { go(navBtn.getAttribute('data-nav')); return; }
 
-  const loginBtn = ev.target.closest('[data-login]');
-  if (loginBtn) {
-    const phone = (document.getElementById('login-phone') || {}).value || '';
-    const code = (document.getElementById('login-code') || {}).value || '';
-    // Мок-вход: любой телефон и код (4+ знаков). Общий финал двух веток ниже.
-    const mockLogin = function () {
-      if (doLogin(phone, code)) { render(); }
-      else { toast('Введите телефон и код (4+ цифр)', true); }
-    };
-    // Результат Phone Auth — Promise (реальный вход) или false (SDK/сессии нет).
-    const settle = function (res, onSent) {
-      if (res === false) { mockLogin(); return; }       // фолбэк на мок-вход
-      if (res && typeof res.then === 'function') {
-        res.then(function (v) {
-          if (v === true) { if (onSent) { onSent(); } else { render(); } }
-          else { toast(String(v === false ? 'Повторите вход' : v), true); }
-        }, function (e) { toast(String(e), true); });
-        return;
+  const testLoginBtn = ev.target.closest('[data-test-login]');
+  if (testLoginBtn) {
+    const nameEl = document.getElementById('login-name');
+    const roleEl = document.getElementById('login-role');
+    const name = nameEl ? nameEl.value.trim() : '';
+    const role = roleEl ? roleEl.value : 'worker';
+    if (!name) { toast('Введите имя', true); return; }
+    login(role, name);
+    // Если Firebase доступен — анонимный вход для синхронизации (Этап 14-B);
+    // без него приложение работает локально, ошибка не блокирует вход.
+    if (typeof firebase !== 'undefined' && firebase.auth) {
+      try {
+        firebase.auth().signInAnonymously().catch(function (e) {
+          console.warn('Anonymous auth недоступен:', e && e.code);
+        });
+      } catch (e) {
+        console.warn('Anonymous auth недоступен:', e && e.message);
       }
-      toast(String(res), true);
-    };
-    // Второй шаг: код уже запрошен — подтверждаем его.
-    if (typeof isOtpSent === 'function' && isOtpSent()) {
-      if (!code) { toast('Введите код из SMS', true); return; }
-      settle(confirmPhoneOtp(code), null);
-      return;
     }
-    // Первый шаг: просим SMS-код; без SDK settle() уведёт на мок-вход.
-    if (!phone) { toast('Введите телефон', true); return; }
-    settle(typeof requestPhoneOtp === 'function' ? requestPhoneOtp(phone) : false,
-      function () { toast('Код отправлен по SMS'); render(); });
+    render();
     return;
   }
 
@@ -307,6 +289,18 @@ document.addEventListener('click', function (ev) {
 
 // --- Старт: все модули подключены обычными <script>, ждём готовности DOM
 // (ui-orders.js идёт после core.js, поэтому первый render откладывается).
+
+// Тестовый режим: восстановление сессии после перезагрузки страницы,
+// чтобы F5 не выкидывал на экран входа (сессию сохраняет login() из auth.js).
+function restoreTestSession() {
+  if (state.role !== null || typeof lsGet !== 'function') return false;
+  try {
+    const saved = JSON.parse(lsGet('crm2_test_user', '') || 'null');
+    if (saved && saved.role && saved.name) { login(saved.role, saved.name); return true; }
+  } catch (e) { /* битая запись — остаёмся на экране входа */ }
+  return false;
+}
+restoreTestSession();
 
 if (state.role === null) state.screen = 'login';
 if (document.readyState === 'loading') {
