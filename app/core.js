@@ -83,6 +83,9 @@ function go(screen, id) {
   pushNav(screen, id);
   state.screen = screen;
   if (id !== undefined) state.orderId = id;
+  // Этап 27: вход на экран гасит его счётчик событий («просмотрено»).
+  if (screen === 'orders') lsSet('crm2_seen_pool', String(Date.now()));
+  if (screen === 'overdue') lsSet('crm2_seen_attention', String(Date.now()));
   render();
 }
 
@@ -123,6 +126,47 @@ function render() {
 }
 
 // renderNavActive(): перерисовка только навигации (подсветка active).
+// --- Счётчики событий на пунктах навигации (Этап 27) ---
+
+// navBadge(key): число новых событий для пункта меню ('' экран → 0).
+// «Новые» = появились/изменились после последнего входа на экран
+// (метку «просмотрено» пишет go(), ключи crm2_seen_pool / crm2_seen_attention).
+// core.js грузится раньше ui-orders/ui-attention — внешние функции через typeof.
+function navBadge(key) {
+  if (!state.role || typeof DB === 'undefined' || !DB) return 0;
+
+  if (key === 'orders') {
+    if (typeof isPoolOrder !== 'function') return 0;
+    var lastSeen = Number(lsGet('crm2_seen_pool', '0')) || 0;
+    return (DB.orders || []).filter(function (o) {
+      if (!isPoolOrder(o)) return false;
+      return Number(o.createdAt || 0) > lastSeen;
+    }).length;
+  }
+
+  if (key === 'overdue') {
+    if (typeof attentionGroups !== 'function') return 0;
+    var g = attentionGroups();
+    var KEYS = ['callback', 'overdue', 'noWorker', 'balance', 'materials', 'confirm'];
+    var total = 0;
+    var maxTs = 0;
+    KEYS.forEach(function (k) {
+      (g[k] || []).forEach(function (it) {
+        total++;
+        var h = (it && it.o && it.o.history) || [];
+        for (var i = h.length - 1; i >= 0; i--) {
+          var ts = Number(h[i] && h[i].ts) || 0;
+          if (ts > maxTs) maxTs = ts;
+        }
+      });
+    });
+    var seen = Number(lsGet('crm2_seen_attention', '0')) || 0;
+    return maxTs > seen ? total : 0;
+  }
+
+  return 0;
+}
+
 function renderNavActive() {
   renderNav();
 }
@@ -131,13 +175,13 @@ function renderNav() {
   const nav = document.getElementById('nav');
   if (!nav) return;
   if (state.role === null) { nav.innerHTML = ''; return; }
-  const badge = (typeof navBadge === 'function') ? navBadge() : 0;
   nav.innerHTML = '<div class="nav-scroll">' + buildNav(state.role).map(function (item) {
     const key = item[0], ico = item[1], label = item[2];
     const active = (state.screen === key) ? ' active' : '';
-    const b = (badge && key === 'orders') ? '<span class="nav-badge">' + badge + '</span>' : '';
+    const b = (typeof navBadge === 'function') ? navBadge(key) : 0;
+    const badgeHtml = b > 0 ? '<span class="nav-badge">' + b + '</span>' : '';
     return '<button class="nav-btn' + active + '" data-nav="' + key + '">' +
-      ico + '<br><span class="nav-label">' + label + '</span>' + b + '</button>';
+      ico + '<br><span class="nav-label">' + label + '</span>' + badgeHtml + '</button>';
   }).join('') + '</div>';
   syncNavScroll(nav);
 }

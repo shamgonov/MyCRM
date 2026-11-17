@@ -114,6 +114,7 @@ function renderOrderListItem(o) {
     '</div>' +
     '<div class="small muted">' + o.date + ' ' + (o.t1 || '') + '-' + (o.t2 || '') +
       ' · ' + escapeHtml(o.city || '') + '</div>' +
+    renderOrderBadges(o) +
     (showTakeBtn(o)
       ? '<div style="margin-top:8px">' + takeButton(o) + '</div>'
       : '') +
@@ -212,6 +213,8 @@ function renderOrderTabMain(o) {
       '<div><b>' + escapeHtml(o.client) + '</b></div>' +
       '<div><a href="tel:' + escapeHtml(o.phone || '') + '">' + escapeHtml(o.phone || '—') + '</a></div>' +
       '<div class="muted">' + escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '</div>' +
+      // Бейджи звонка/тегов (Этап 27) — под заголовком клиента, над блоком тегов.
+      renderOrderBadges(o) +
     '</div>' +
     (editable && (o.status === 'new' || o.status === 'inspection')
       ? '<div class="card" style="margin-top:8px">' +
@@ -264,6 +267,49 @@ function renderOrderRouteBlock(o, editable) {
       '<h4>📍 Маршрут закупки</h4>' + rows +
       '<p class="small muted">Навигатор откроется в новой вкладке по адресу точки.</p>' +
     '</div>';
+}
+
+// --- Бейджи заявки: последний итог звонка + теги (Этап 27) ---
+
+// callResultBadgeVariant(details): цвет бейджа по смыслу итога звонка.
+// «не дозвонился» / «перезвон(ить)» → warn, «отказ» → danger, иначе → accent.
+function callResultBadgeVariant(details) {
+  const d = String(details || '').toLowerCase();
+  if (d.indexOf('не дозвонился') >= 0 || d.indexOf('перезвон') >= 0) return 'var(--warn)';
+  if (d.indexOf('отказ') >= 0) return 'var(--danger)';
+  return 'var(--accent)';
+}
+
+// stripLeadingEmoji(txt): убирает префикс-эмодзи (всё до первой буквы).
+// Простой срез по индексу безопасен для суррогатных пар в ES2017.
+function stripLeadingEmoji(txt) {
+  const s = String(txt || '');
+  const m = s.match(/[A-Za-zА-Яа-яЁё]/);
+  return m ? s.slice(m.index) : s;
+}
+
+// renderOrderBadges(o): HTML-строка бейджей ('' если показывать нечего).
+function renderOrderBadges(o) {
+  if (!o) return '';
+  const parts = [];
+
+  const hist = o.history || [];
+  let lastCall = null;
+  for (let i = hist.length - 1; i >= 0; i--) {
+    if (hist[i] && hist[i].action === 'call_result') { lastCall = hist[i]; break; }
+  }
+  if (lastCall) {
+    parts.push('<span class="badge" style="background:' + callResultBadgeVariant(lastCall.details) +
+      ';border-color:transparent;color:var(--accent-ink);margin-right:4px">📞 ' +
+      escapeHtml(stripLeadingEmoji(lastCall.details)) + '</span>');
+  }
+
+  (o.tags || []).forEach(function (t) {
+    parts.push('<span class="badge" style="background:var(--accent-soft);color:var(--accent);margin-right:4px">' +
+      escapeHtml(t) + '</span>');
+  });
+
+  return parts.length ? '<div style="margin-top:6px">' + parts.join('') + '</div>' : '';
 }
 
 // Блок тегов проблемы (Этап 17): чипы с крестиком + пресет + произвольный тег.

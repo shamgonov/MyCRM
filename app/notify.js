@@ -221,6 +221,10 @@ function scheduleChecks(intervalSec) {
 }
 
 function notifyTick() {
+  // Этап 27: тик пересчитывает счётчики на пунктах навигации (без render()).
+  if (typeof renderNav === 'function' && typeof state !== 'undefined' && state.role) {
+    renderNav();
+  }
   // Утренний дайджест важнее потока отдельных уведомлений (Этап 19).
   if (maybeDigest() !== null) {
     if (typeof state !== 'undefined' && state.screen === 'orders' && typeof render === 'function') {
