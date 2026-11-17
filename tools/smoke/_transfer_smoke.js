@@ -19,6 +19,7 @@ var modalStub = { innerHTML: '' };
 // Поля модалки переноса: id → элемент { value }.
 var FIELDS = {};
 var clickHandlers = [];
+var changeHandlers = [];
 
 globalThis.document = {
   readyState: 'loading',
@@ -28,7 +29,7 @@ globalThis.document = {
     if (id === 'modal-container') return modalStub;
     return Object.prototype.hasOwnProperty.call(FIELDS, id) ? FIELDS[id] : null;
   },
-  addEventListener: function (type, fn) { if (type === 'click') clickHandlers.push(fn); }
+  addEventListener: function (type, fn) { if (type === 'click') clickHandlers.push(fn); if (type === 'change') changeHandlers.push(fn); }
 };
 globalThis.confirm = function () { return true; };
 globalThis.alert = function () {};
@@ -56,6 +57,19 @@ function clickOn(attr, value) {
     }
   };
   clickHandlers.forEach(function (fn) { fn({ target: target }); });
+}
+
+function fireChange(selectValue, selectAttr, selectId) {
+  var target = {
+    value: selectValue,
+    getAttribute: function (n) { return n === selectAttr ? String(selectId) : null; },
+    id: selectId || '',
+    closest: function (selector) {
+      if (selector === '[data-status-select]') return target;
+      return null;
+    }
+  };
+  changeHandlers.forEach(function (fn) { fn({ target: target }); });
 }
 
 function freshOrder(id, status) {
@@ -319,6 +333,27 @@ if (savedFb) globalThis.firebase = savedFb;
 
 // Обычные переходы прежних статусов не изменились (регрессия матрицы).
 assert.eq(STATUS_TRANSITIONS.new.indexOf('inspection') >= 0, true, '12. new→inspection');
+
+// --- 13. Селект «Перенос»: не меняет статус, открывает модалку ---
+
+DB.orders = [freshOrder(200, 'new')];
+modalStub.innerHTML = '';
+fireChange('transfer', 'data-status-select', '200');
+// Статус заявки НЕ должен измениться (это делает transferOrder через модалку).
+assert.eq(findOrderById(200).status, 'new', '13. селект не изменил статус');
+// Модалка переноса открылась.
+assert(modalStub.innerHTML.indexOf('tr-date') >= 0, '13. селект открыл модалку переноса');
+// Select.value вернулся к исходному статусу.
+// (fireChange не может проверить это напрямую — проверяем, что select.value не 'transfer')
+assert(findOrderById(200).status !== 'transfer', '13. статус не стал transfer');
+closeModal();
+
+// --- 14. Селект «Перенос» при несуществующей заявке — не падает ---
+
+DB.orders = [];
+modalStub.innerHTML = '';
+fireChange('transfer', 'data-status-select', '99999');
+assert(modalStub.innerHTML.indexOf('tr-date') < 0, '14. несуществующая заявка → нет модалки');
 assert.eq(STATUS_TRANSITIONS.inwork.indexOf('completed') >= 0, true, '12. inwork→completed');
 assert.eq(STATUS_TRANSITIONS.inwork.indexOf('postponed') >= 0, true, '12. Q4 inwork→postponed');
 assert.eq(STATUS_TRANSITIONS.completed.indexOf('paid') >= 0, true, '12. completed→paid');

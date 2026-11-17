@@ -1073,6 +1073,13 @@ document.addEventListener('change', function (ev) {
     const id = Number(select.getAttribute('data-status-select'));
     const ns = select.value;
     if (!ns) return;
+    // Этап 29 Hotfix: «Перенос» — не меняем статус, открываем модалку.
+    if (ns === 'transfer') {
+      const o = (DB.orders || []).find(function (x) { return x.id === id; });
+      if (o) renderTransferModal(o);
+      select.value = o ? o.status : '';
+      return;
+    }
     if (transitionOrder(id, ns)) {
       toast('Статус: ' + (STATUS_LABELS[ns] || ns));
       render();
