@@ -22,7 +22,7 @@
   --radius-sm: 8px;
   --shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  --nav-h: 56px;
+  --nav-h: 64px;
 
   /* Алиасы для UI-модулей (этап 4+) */
   --bg-primary: var(--bg);
@@ -183,27 +183,50 @@ input:focus, select:focus, textarea:focus {
 
 /* --- Нижняя навигация --- */
 #nav {
-  position: fixed;
-  left: 0; right: 0; bottom: 0;
-  z-index: 50;
-  display: flex;
-  justify-content: center;
-  gap: 4px;
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
   background: var(--bg-elev);
   border-top: 1px solid var(--line);
-  padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+  padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
 }
-#nav .nav-btn {
-  flex: 0 1 96px;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
-  font-size: 12px;
-  padding: 6px 4px;
-  border-radius: var(--radius-sm);
-  cursor: pointer;
+/* Фейды по краям подсказывают, что лента продолжается */
+#nav::before, #nav::after {
+  content: ''; position: absolute; top: 0; bottom: 0; width: 20px;
+  pointer-events: none; z-index: 2;
+}
+#nav::before { left: 0;  background: linear-gradient(to right, var(--bg-elev), rgba(20,20,20,0)); }
+#nav::after  { right: 0; background: linear-gradient(to left,  var(--bg-elev), rgba(20,20,20,0)); }
+
+.nav-scroll {
   position: relative;
+  display: flex; gap: 4px;
+  overflow-x: auto; overflow-y: hidden;
+  padding: 0 10px 4px;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) var(--card);
+}
+/* Центрируем, когда пунктов мало; при переполнении не режем начало */
+.nav-scroll > :first-child { margin-left: auto; }
+.nav-scroll > :last-child  { margin-right: auto; }
+.nav-scroll::-webkit-scrollbar { height: 4px; }
+.nav-scroll::-webkit-scrollbar-track { background: var(--card); border-radius: 999px; }
+.nav-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+.nav-scroll::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+#nav .nav-btn {
+  flex: 0 0 auto; min-width: 72px;
+  border: 0; background: transparent; color: var(--muted);
+  font: inherit; font-size: 11px; line-height: 1.2;
+  padding: 6px 8px; border-radius: var(--radius-sm);
+  cursor: pointer; position: relative;
+  scroll-snap-align: center;
+  white-space: nowrap;
+}
+#nav .nav-btn .nav-label {
+  display: block; max-width: 88px;
+  overflow: hidden; text-overflow: ellipsis;
 }
 #nav .nav-btn.active { color: var(--accent); background: var(--accent-soft); }
 #nav .nav-btn .nav-badge {

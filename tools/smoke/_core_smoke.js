@@ -135,6 +135,31 @@ assert(loginHtml.indexOf('login-phone') < 0, 'вход: поле телефон�
 assert(loginHtml.indexOf('login-code') < 0, 'вход: поле SMS-кода больше нет');
 assert(loginHtml.indexOf('recaptcha-container') < 0, 'вход: #recaptcha-container убран');
 
+// --- Мобильная навигация: скролл-обёртка и центрирование активного пункта
+// Проверяем на заполненной навигации: рендерим под ролью admin.
+login('admin', 'Владелец');
+render();
+assert(navEl.innerHTML.indexOf('nav-scroll') >= 0, 'nav: обёртка nav-scroll для горизонтального скролла');
+assert(navEl.innerHTML.indexOf('nav-label') >= 0, 'nav: подписи обёрнуты в span.nav-label');
+// data-nav совместим со старым делегатом (регрессия контракта).
+assert(navEl.innerHTML.indexOf('data-nav="orders"') >= 0, 'nav: data-nav на месте');
+const fakeScroll = { clientWidth: 360, scrollLeft: 0 };
+const fakeBtn = { offsetLeft: 300, offsetWidth: 72 };
+const fakeNav = { querySelector: function (s) {
+  if (s === '.nav-scroll') return fakeScroll;
+  if (s === '.nav-btn.active') return fakeBtn;
+  return null;
+} };
+syncNavScroll(fakeNav);
+assert.eq(fakeScroll.scrollLeft, 156, 'syncNavScroll: активный пункт по центру (300-(360-72)/2)');
+fakeBtn.offsetLeft = 10;
+syncNavScroll(fakeNav);
+assert.eq(fakeScroll.scrollLeft, 0, 'syncNavScroll: scrollLeft не уходит в минус');
+syncNavScroll(null);
+syncNavScroll({});
+assert(true, 'syncNavScroll: безопасен на стабах без querySelector');
+logout();
+
 // --- restoreTestSession(): сессия переживает перезагрузку страницы
 assert.eq(lsGet('crm2_test_user', ''), '', 'logout: сессия crm2_test_user очищена');
 state.role = null;

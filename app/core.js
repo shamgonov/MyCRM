@@ -117,13 +117,26 @@ function renderNav() {
   if (!nav) return;
   if (state.role === null) { nav.innerHTML = ''; return; }
   const badge = (typeof navBadge === 'function') ? navBadge() : 0;
-  nav.innerHTML = buildNav(state.role).map(function (item) {
+  nav.innerHTML = '<div class="nav-scroll">' + buildNav(state.role).map(function (item) {
     const key = item[0], ico = item[1], label = item[2];
     const active = (state.screen === key) ? ' active' : '';
     const b = (badge && key === 'orders') ? '<span class="nav-badge">' + badge + '</span>' : '';
     return '<button class="nav-btn' + active + '" data-nav="' + key + '">' +
-      ico + '<br>' + label + b + '</button>';
-  }).join('');
+      ico + '<br><span class="nav-label">' + label + '</span>' + b + '</button>';
+  }).join('') + '</div>';
+  syncNavScroll(nav);
+}
+
+// Центрирует активный пункт в горизонтальной прокрутке (мобильная навигация).
+// Guard'ы обязательны: в смоуках nav — стаб без querySelector.
+function syncNavScroll(nav) {
+  if (!nav || typeof nav.querySelector !== 'function') return;
+  const sc = nav.querySelector('.nav-scroll');
+  const btn = nav.querySelector('.nav-btn.active');
+  if (!sc || !btn) return;
+  if (typeof btn.offsetLeft !== 'number' || typeof sc.clientWidth !== 'number') return;
+  const target = btn.offsetLeft - (sc.clientWidth - btn.offsetWidth) / 2;
+  sc.scrollLeft = Math.max(0, target);
 }
 
 // --- Экран входа (тестовый режим: имя + роль, без Firebase Phone Auth;
