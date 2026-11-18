@@ -43,12 +43,17 @@ function renderClientList() {
     '</div>';
   });
 
+  // Этап 36: кнопка добавления — в отдельной панели .head-actions, а не
+  // соседом заголовка в .spread. Так она не конкурирует за ширину строки и
+  // видна на телефоне независимо от каскада медиазапросов.
   return '<div class="spread">' +
       '<h2>📇 Контрагенты</h2>' +
-      (can('clients_edit')
-        ? '<button class="btn btn-primary" data-new-client>＋ Контрагент</button>'
-        : '') +
     '</div>' +
+    (can('clients_edit')
+      ? '<div class="head-actions">' +
+          '<button class="btn btn-primary" data-new-client>＋ Контрагент</button>' +
+        '</div>'
+      : '') +
     renderClientsTabs() +
     '<div class="card">' +
       (rows.length
@@ -93,10 +98,16 @@ function renderSuppliersTab() {
     '</div>';
   }).join('');
 
+  // Этап 36: кнопка «➕ Поставщик» — в отдельной панели .head-actions
+  // (см. renderClientList): не конкурирует с заголовком за ширину строки.
   return '<div class="spread">' +
       '<h2>🚚 Поставщики</h2>' +
-      (editable ? '<button class="btn btn-primary" data-add-supplier>➕ Поставщик</button>' : '') +
     '</div>' +
+    (editable
+      ? '<div class="head-actions">' +
+          '<button class="btn btn-primary" data-add-supplier>➕ Поставщик</button>' +
+        '</div>'
+      : '') +
     renderClientsTabs() +
     '<div class="card">' +
       (rows ? '<div class="list">' + rows + '</div>'

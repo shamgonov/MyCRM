@@ -352,3 +352,49 @@ var clList = renderClientList();
 assert(clList.indexOf('<div class="spread">') >= 0, '7: заголовок списка в .spread');
 assert(clList.indexOf('style="width:') < 0 && clList.indexOf('style="min-width:') < 0,
   '7: в списке контрагентов нет инлайн-ширин');
+
+// --- 8. Этап 36: кнопки добавления вне .spread (панель .head-actions) ---
+// Структурное решение: кнопка не соседствует с заголовком, поэтому видна на
+// телефоне независимо от каскада медиазапросов и кэша CSS.
+
+assert(clList.indexOf('class="head-actions"') >= 0,
+  '8: «＋ Контрагент» в отдельной панели .head-actions');
+var haPos = clList.indexOf('class="head-actions"');
+var nbPos = clList.indexOf('data-new-client');
+assert(haPos >= 0 && nbPos > haPos, '8: кнопка внутри .head-actions');
+// Кнопка не внутри .spread: между открытием .spread и кнопкой стоит </div>.
+var spStart = clList.indexOf('<div class="spread">');
+assert(spStart >= 0 && haPos > spStart &&
+       clList.slice(spStart, haPos).indexOf('</div>') >= 0,
+  '8: панель действий идёт после закрытия .spread');
+assert(clList.indexOf('data-new-client>＋ Контрагент</button>') >= 0 ||
+       clList.indexOf('data-new-client>') >= 0,
+  '8: у кнопки нет инлайн-стилей ширины');
+
+CL_TAB = 'suppliers';
+DB.suppliers = [];
+var supList = renderClients();
+assert(supList.indexOf('class="head-actions"') >= 0,
+  '8: «➕ Поставщик» в отдельной панели .head-actions');
+var supHaPos = supList.indexOf('class="head-actions"');
+var supBtnPos = supList.indexOf('data-add-supplier');
+assert(supHaPos >= 0 && supBtnPos > supHaPos, '8: кнопка поставщика внутри панели');
+CL_TAB = 'list';
+
+// Worker без clients_edit — панели действий нет вовсе.
+login('worker', 'Мастер');
+var listWorker8 = renderClientList();
+assert(listWorker8.indexOf('head-actions') < 0, '8: worker — нет панели действий');
+assert(listWorker8.indexOf('data-new-client') < 0, '8: worker — нет кнопки контрагента');
+CL_TAB = 'suppliers';
+assert(renderClients().indexOf('head-actions') < 0, '8: worker — нет панели поставщиков');
+CL_TAB = 'list';
+login('admin', 'Владелец');
+
+// CSS панели: блочный поток, кнопка растягивается.
+var haRule = ruleBody('\\.head-actions(?![\\w-])');
+assert(haRule.indexOf('display: flex') >= 0, '8: .head-actions → display: flex');
+assert(haRule.indexOf('gap: 6px') >= 0, '8: .head-actions → gap: 6px');
+var haBtn = ruleBody('\\.head-actions\\s*>\\s*\\.btn');
+assert(haBtn.indexOf('flex: 1 1 auto') >= 0, '8: .head-actions > .btn → flex: 1 1 auto');
+assert(haBtn.indexOf('min-width: 0') >= 0, '8: .head-actions > .btn → min-width: 0');
