@@ -107,7 +107,8 @@ assert(spreadRule.indexOf('gap: 8px') >= 0, '3.3: .spread → gap: 8px');
 // Заголовок тянется, но не сплющивается в ноль и переносит длинные слова.
 var spreadH2 = ruleBody('\\.spread\\s+h2');
 assert(spreadH2.indexOf('flex: 1 1 auto') >= 0, '3.3: .spread h2 → flex: 1 1 auto');
-assert(spreadH2.indexOf('min-width: 200px') >= 0, '3.3: .spread h2 → min-width: 200px');
+assert(spreadH2.indexOf('min-width: min(200px, 100%)') >= 0,
+  '3.3: .spread h2 → min-width через min() (без переполнения на узких экранах)');
 assert(spreadH2.indexOf('overflow-wrap: break-word') >= 0,
   '3.3: .spread h2 → перенос длинных названий');
 // Кнопка действия не сжимается и не разрывается внутри себя.
@@ -131,6 +132,46 @@ assert(headBtn.indexOf('white-space: nowrap') >= 0, '3.3: .head-row > .btn → n
 // flex-wrap: wrap в .row перестал бы работать).
 assert(ruleBody('\\.row\\s*>\\s*\\.btn(?![\\w-])').indexOf('white-space: nowrap') < 0,
   '3.3: .row > .btn без nowrap (flex-wrap ряда сохранён)');
+
+// --- 3.4 Этап 34.1: на узких экранах кнопка переносится под заголовок ---
+// Базовый flex-wrap не гарантировал видимость «➕ Контрагент»: nowrap-кнопку
+// выталкивало за правый край и резал overflow-x: hidden. Медиазапрос < 768px
+// даёт заголовку всю строку, а кнопке — всю ширину ниже.
+
+function mediaBlock(marker) {
+  var start = css.indexOf(marker);
+  if (start < 0) return '';
+  var open = css.indexOf('{', start);
+  if (open < 0) return '';
+  var depth = 0;
+  for (var i = open; i < css.length; i++) {
+    if (css[i] === '{') depth++;
+    else if (css[i] === '}') {
+      depth--;
+      if (depth === 0) return css.slice(open + 1, i);
+    }
+  }
+  return '';
+}
+var mqMob = mediaBlock('@media (max-width: 767px)');
+assert(mqMob.length > 0, '3.4: мобильный @media (max-width: 767px) найден');
+
+function mqRule(selRe) {
+  var m = mqMob.match(new RegExp(selRe + '\\s*\\{([^}]*)\\}'));
+  return m ? m[1] : '';
+}
+// Заголовок занимает всю строку (не выталкивает кнопку).
+var mSpreadH2 = mqRule('\\.spread\\s*>\\s*h2');
+assert(mSpreadH2.indexOf('flex: 1 1 100%') >= 0, '3.4: в @media .spread > h2 на всю строку');
+assert(mSpreadH2.indexOf('min-width: 0') >= 0, '3.4: в @media у заголовка min-width: 0');
+// Кнопка переносится под заголовок и растягивается на всю ширину.
+var mSpreadBtn = mqRule('\\.spread\\s*>\\s*\\.btn');
+assert(mSpreadBtn.indexOf('flex: 1 1 100%') >= 0, '3.4: в @media .spread > .btn на всю ширину');
+// Шапка карточки: кнопка «←» слева, заголовок ниже, бейдж — порядок задан.
+assert(mqRule('\\.head-row\\s*>\\s*h2').indexOf('flex: 1 1 100%') >= 0,
+  '3.4: в @media .head-row > h2 на всю строку');
+assert(mqRule('\\.head-row\\s*>\\s*\\.btn').indexOf('order: 1') >= 0,
+  '3.4: в @media кнопка «←» идёт первой в шапке');
 
 // --- 4. Нижняя навигация ---
 

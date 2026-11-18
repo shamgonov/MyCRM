@@ -105,9 +105,11 @@ a:hover { text-decoration: underline; }
 }
 .spread { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 /* Заголовок экрана тянется, кнопка действия не сжимается и переносится
-   целиком на новую строку, если ширины не хватает (Этап 33). */
-.spread h2 { margin: 0; flex: 1 1 auto; min-width: 200px; overflow-wrap: break-word; }
-.spread > .btn { flex-shrink: 0; white-space: nowrap; }
+   целиком на новую строку, если ширины не хватает (Этап 33, 34.1).
+   min-width через min() — на узких экранах (320px) и крупном системном
+   шрифте заголовок не создаёт горизонтальный переполнение. */
+.spread h2 { margin: 0; flex: 1 1 auto; min-width: min(200px, 100%); overflow-wrap: break-word; }
+.spread > .btn { flex-shrink: 0; white-space: nowrap; max-width: 100%; }
 
 /* --- Карточки --- */
 .card {
@@ -440,5 +442,32 @@ input:focus, select:focus, textarea:focus {
   /* Скроллбар не нужен */
   .nav-scroll::-webkit-scrollbar {
     display: none;
+  }
+}
+
+/* --- Мобильные заголовки и кнопки действий (Этап 34.1) ---
+   На узких экранах заголовок забирает всю строку, а кнопка действия
+   переносится под него во всю ширину. Так «➕ Контрагент» гарантированно
+   виден и не вылезает за правый край (overflow-x: hidden резал бы его). */
+@media (max-width: 767px) {
+  .spread > h2 {
+    flex: 1 1 100%;
+    min-width: 0;
+  }
+  .spread > .btn {
+    flex: 1 1 100%;
+    justify-content: center;
+    text-align: center;
+  }
+  /* Шапка карточки: заголовок на всю ширину, кнопки («←», бейдж) ниже. */
+  .head-row > h2 {
+    flex: 1 1 100%;
+    order: 2;
+  }
+  .head-row > .btn {
+    order: 1;
+  }
+  .head-row > .badge {
+    order: 3;
   }
 }
