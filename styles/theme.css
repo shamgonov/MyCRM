@@ -397,3 +397,48 @@ input:focus, select:focus, textarea:focus {
   white-space: nowrap;
   scroll-snap-align: start;
 }
+
+/* --- Десктопная навигация (Этап 34) ---
+   На широких экранах горизонтальный скролл не нужен: лента центрируется,
+   кнопки получают нормальный размер, видимы все пункты сразу.
+   Мобильные правила выше остаются для экранов < 768px. */
+@media (min-width: 768px) {
+  #nav {
+    padding: 8px 16px calc(8px + env(safe-area-inset-bottom));
+  }
+
+  /* Убираем скролл на десктопе */
+  .nav-scroll {
+    overflow-x: visible;
+    overflow-y: visible;
+    padding: 0;
+    scroll-snap-type: none;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  /* Фейды не нужны на десктопе */
+  #nav::before,
+  #nav::after {
+    display: none;
+  }
+
+  /* Кнопки нормального размера */
+  #nav .nav-btn {
+    min-width: 96px;
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+
+  #nav .nav-btn .nav-label {
+    max-width: none;
+    overflow: visible;
+    text-overflow: clip;
+  }
+
+  /* Скроллбар не нужен */
+  .nav-scroll::-webkit-scrollbar {
+    display: none;
+  }
+}
