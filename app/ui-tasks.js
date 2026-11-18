@@ -204,13 +204,19 @@ function renderTaskModal(task) {
       escapeHtml(String(o.id)) + ' · ' + escapeHtml(o.client || '') + '</option>';
   }).join('');
 
+  // Этап 41: 🎤 у текстовых полей задачи (title, note).
+  const mic = function (id) {
+    return (typeof renderVoiceFieldBtn === 'function') ? renderVoiceFieldBtn(id) : '';
+  };
+
   showModal(
     '<h3>' + (editing ? '✎ Задача' : '＋ Новая задача') + '</h3>' +
-    '<label class="field"><span>Заголовок *</span>' +
-      '<input id="tk-title" type="text" value="' + escapeHtml(t ? t.title : '') + '" placeholder="Что сделать"></label>' +
-    '<label class="field"><span>Заметка</span>' +
-      '<textarea id="tk-note" rows="3" placeholder="Детали, материалы, адрес">' +
-      escapeHtml(t ? t.note : '') + '</textarea></label>' +
+    '<label class="field"><span>Заголовок *</span><div class="row">' +
+      '<input id="tk-title" type="text" style="flex:1" value="' + escapeHtml(t ? t.title : '') +
+        '" placeholder="Что сделать">' + mic('tk-title') + '</div></label>' +
+    '<label class="field"><span>Заметка</span><div class="row">' +
+      '<textarea id="tk-note" rows="3" style="flex:1" placeholder="Детали, материалы, адрес">' +
+      escapeHtml(t ? t.note : '') + '</textarea>' + mic('tk-note') + '</div></label>' +
     '<label class="field"><span>Дата выполнения</span>' +
       '<input id="tk-due" type="date" value="' + escapeHtml(t && t.dueDate ? t.dueDate : '') + '"></label>' +
     // Этап 31: время напоминания + оповещение.

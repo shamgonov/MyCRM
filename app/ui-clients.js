@@ -81,10 +81,13 @@ function renderClientList() {
 // Поле live-поиска контрагентов (Этап 38). Значение хранится в CL_SEARCH,
 // поэтому после render() ввод сохраняется; ✕ очищает запрос.
 function renderClientSearch() {
+  // Этап 41: 🎤 только при загруженном ui-voice.js — иначе разметка прежняя.
+  var mic = (typeof renderVoiceFieldBtn === 'function') ? renderVoiceFieldBtn('cl-search') : '';
   return '<div class="search-row">' +
       '<input type="search" id="cl-search" class="search-input" ' +
         'placeholder="🔍 Поиск по имени, телефону, адресу..." ' +
         'value="' + escapeHtml(CL_SEARCH) + '">' +
+      mic +
       (CL_SEARCH ? '<button class="btn" data-clear-search title="Очистить">✕</button>' : '') +
     '</div>';
 }
@@ -157,10 +160,13 @@ function renderSuppliersTab() {
 
 // Поле live-поиска поставщиков на вкладке «🚚 Поставщики» (Этап 38).
 function renderSupplierSearch() {
+  // Этап 41: 🎤 только при загруженном ui-voice.js — иначе разметка прежняя.
+  var mic = (typeof renderVoiceFieldBtn === 'function') ? renderVoiceFieldBtn('sup-tab-search') : '';
   return '<div class="search-row">' +
       '<input type="search" id="sup-tab-search" class="search-input" ' +
         'placeholder="🔍 Поиск по названию, телефону, адресу..." ' +
         'value="' + escapeHtml(SUP_SEARCH) + '">' +
+      mic +
       (SUP_SEARCH ? '<button class="btn" data-clear-sup-tab-search title="Очистить">✕</button>' : '') +
     '</div>';
 }

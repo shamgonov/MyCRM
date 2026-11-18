@@ -11,10 +11,15 @@ var PRICE_SEARCH = ''; // live-поиск в админке: прайс (Эта�
 
 // Поле live-поиска для админки (Этап 38): id, значение, плейсхолдер,
 // data-атрибут кнопки очистки.
-function adminSearchRow(id, value, placeholder, clearAttr) {
+// micId (Этап 41) — необязательный: id поля для кнопки 🎤. Пусто → кнопки нет,
+// поэтому остальные вызовы хелпера дают прежнюю разметку байт-в-байт.
+function adminSearchRow(id, value, placeholder, clearAttr, micId) {
+  var mic = (micId && typeof renderVoiceFieldBtn === 'function')
+    ? renderVoiceFieldBtn(micId) : '';
   return '<div class="search-row">' +
       '<input type="search" id="' + id + '" class="search-input" ' +
         'placeholder="' + placeholder + '" value="' + escapeHtml(value) + '">' +
+      mic +
       (value ? '<button class="btn" ' + clearAttr + ' title="Очистить">✕</button>' : '') +
     '</div>';
 }
@@ -167,7 +172,8 @@ function renderAdminPrice() {
       // id отличается от #price-search модалки ui-estimate.js (Этап 17):
       // иначе ввод в модалке «Работа из прайса» засорял бы PRICE_SEARCH.
       adminSearchRow('admin-price-search', PRICE_SEARCH,
-        '🔍 Поиск по названию, категории, ед. изм...', 'data-clear-price-search') +
+        '🔍 Поиск по названию, категории, ед. изм...', 'data-clear-price-search',
+        'admin-price-search') +
       arow(['Название', 'Категория', 'Цена', 'Ед.', 'Действия'], true, COLS_PRICE) +
       rows +
     '</div>';

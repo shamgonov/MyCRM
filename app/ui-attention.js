@@ -85,11 +85,16 @@ function attentionGroups() {
 function renderAttentionBlock(title, items) {
   const rows = items.map(function (it) {
     const o = it.o;
+    // Этап 41: рендер не должен падать, если модуль-владелец не загрузился.
+    const num = (typeof orderDisplayNumber === 'function')
+      ? orderDisplayNumber(o) : String(o && o.id != null ? o.id : '—');
+    const lbl = (typeof STATUS_LABELS !== 'undefined' && STATUS_LABELS && STATUS_LABELS[o.status])
+      ? STATUS_LABELS[o.status] : String((o && o.status) || '');
+    const cls = (typeof statusBadgeClass === 'function') ? statusBadgeClass(o.status) : 'badge';
     return '<div class="list-item" data-attention-order="' + o.id + '">' +
       '<div class="spread">' +
-        '<b>№' + orderDisplayNumber(o) + ' ' + escapeHtml(o.client || '—') + '</b>' +
-        '<span class="' + statusBadgeClass(o.status) + '">' +
-          (STATUS_LABELS[o.status] || o.status) + '</span>' +
+        '<b>№' + num + ' ' + escapeHtml(o.client || '—') + '</b>' +
+        '<span class="' + cls + '">' + lbl + '</span>' +
       '</div>' +
       '<div class="small muted">' + o.date + ' ' + (o.t1 || '') + '-' + (o.t2 || '') +
         ' · ' + escapeHtml(it.note || '') + '</div>' +
@@ -104,38 +109,50 @@ function renderAttentionBlock(title, items) {
 
 // --- 2. Главный экран «Требует внимания» ---
 
+// Этап 41: тело под try/catch — исключение внутри блока не должно ронять экран.
 function renderAttention() {
-  const g = attentionGroups();
-  const blocks = [
-    ['📞 Нужен перезвон', g.callback],
-    ['⚠️ Просрочено', g.overdue],
-    ['👷 Без исполнителя', g.noWorker],
-    ['💰 Остаток к оплате', g.balance],
-    ['🧱 Материалы к закупке', g.materials],
-    ['❓ Ждёт подтверждения', g.confirm]
-  ].filter(function (b) { return b[1].length; })
-   .map(function (b) { return renderAttentionBlock(b[0], b[1]); });
+  try {
+    const g = attentionGroups();
+    const blocks = [
+      ['📞 Нужен перезвон', g.callback],
+      ['⚠️ Просрочено', g.overdue],
+      ['👷 Без исполнителя', g.noWorker],
+      ['💰 Остаток к оплате', g.balance],
+      ['🧱 Материалы к закупке', g.materials],
+      ['❓ Ждёт подтверждения', g.confirm]
+    ].filter(function (b) { return b[1].length; })
+     .map(function (b) { return renderAttentionBlock(b[0], b[1]); });
 
-  const total = blocks.length ? g.callback.length + g.overdue.length + g.noWorker.length +
-    g.balance.length + g.materials.length + g.confirm.length : 0;
+    const total = blocks.length ? g.callback.length + g.overdue.length + g.noWorker.length +
+      g.balance.length + g.materials.length + g.confirm.length : 0;
 
-  return '<h2>⚠️ Требует внимания</h2>' +
-    (blocks.length
-      ? '<p class="small muted">Всего позиций: ' + total + '</p>' + blocks.join('')
-      : '<div class="card"><p class="muted">Всё под контролем — заявок, требующих внимания, нет.</p></div>');
+    return '<h2>⚠️ Требует внимания</h2>' +
+      (blocks.length
+        ? '<p class="small muted">Всего позиций: ' + total + '</p>' + blocks.join('')
+        : '<div class="card"><p class="muted">Всё под контролем — заявок, требующих внимания, нет.</p></div>');
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('ATTENTION render failed:', err);
+    }
+    return '<h2>⚠️ Требует внимания</h2>' +
+      '<div class="card"><p class="muted">⚠️ Не удалось отобразить экран: ' +
+      escapeHtml(String(err && err.message ? err.message : err)) + '</p></div>';
+  }
 }
 
 // --- 3. Итог звонка: модалка и доменная ветка ---
 
 function renderCallResultModal(o) {
   if (!o) return;
+  var num = (typeof orderDisplayNumber === 'function')
+    ? orderDisplayNumber(o) : String(o.id != null ? o.id : '—');
   const buttons = CALL_BRANCHES.map(function (b) {
     return '<button class="btn btn-block" data-call-result="' + b[0] + '" style="margin-top:6px">' +
       b[1] + '</button>';
   }).join('');
 
   showModal(
-    '<h3>📞 Итог звонка: №' + orderDisplayNumber(o) + '</h3>' +
+    '<h3>📞 Итог звонка: №' + num + '</h3>' +
     '<p class="small muted">' + escapeHtml(o.client || '') + ' · ' +
       escapeHtml(o.phone || '—') + '</p>' +
     '<p class="small muted">Выберите результат — он попадёт в журнал заявки.</p>' +
@@ -147,8 +164,10 @@ function renderCallResultModal(o) {
 // Модалка ручного выбора даты/времени перезвона (ветка 'later_custom').
 function renderCustomCallbackModal(o) {
   var today = localToday();
+  var num = (typeof orderDisplayNumber === 'function')
+    ? orderDisplayNumber(o) : String(o && o.id != null ? o.id : '—');
   showModal(
-    '<h3>📅 Перезвонить: №' + orderDisplayNumber(o) + '</h3>' +
+    '<h3>📅 Перезвонить: №' + num + '</h3>' +
     '<label class="field"><span>Дата *</span>' +
       '<input id="cc-date" type="date" value="' + today + '" min="' + today + '"></label>' +
     '<label class="field"><span>Время *</span>' +
@@ -162,10 +181,26 @@ function renderCustomCallbackModal(o) {
 
 // applyCallResult(o, branch): одна запись в историю + действие ветки.
 // Возвращает { ok, text } — text идёт в toast.
+// Этап 41: без модуля данных изменение НЕ применяется (иначе правка в DB
+// осталась бы несохранённой и потерялась бы при перезагрузке).
 function applyCallResult(o, branch) {
   if (!o) return { ok: false, text: 'Нет заявки' };
   var known = CALL_BRANCHES.some(function (b) { return b[0] === branch; });
   if (!known) return { ok: false, text: 'Неизвестная ветка' };
+
+  if (typeof saveOrderLocal !== 'function') {
+    if (typeof toast === 'function') toast('Модуль данных недоступен — изменение не сохранено', true);
+    return { ok: false, text: '' };
+  }
+
+  // Этап 41: ветки со сменой статуса требуют transitionOrder — без него не
+  // трогаем заявку вовсе (иначе в памяти осталась бы несохранённая правка).
+  var needsTransition = branch !== 'later_tomorrow' && branch !== 'later_custom' &&
+    !CALLBACK_HOURS[branch];
+  if (needsTransition && typeof transitionOrder !== 'function') {
+    if (typeof toast === 'function') toast('Модуль данных недоступен — изменение не сохранено', true);
+    return { ok: false, text: '' };
+  }
 
   normalizeOrder(o);
 
@@ -221,11 +256,13 @@ function applyCallResult(o, branch) {
   });
   saveOrderLocal(o);
   const moved = transitionOrder(o.id, to);
+  var toLabel = (typeof STATUS_LABELS !== 'undefined' && STATUS_LABELS && STATUS_LABELS[to])
+    ? STATUS_LABELS[to] : to;
   return {
     ok: moved,
     text: moved
-      ? 'Статус: ' + (STATUS_LABELS[to] || to)
-      : 'Переход в «' + (STATUS_LABELS[to] || to) + '» не разрешён'
+      ? 'Статус: ' + toLabel
+      : 'Переход в «' + toLabel + '» не разрешён'
   };
 }
 
@@ -261,6 +298,10 @@ function delegateClicks() {
                          Number(tparts[0]), Number(tparts[1]), 0, 0);
       const ts = d.getTime();
       if (ts <= Date.now()) { toast('Время уже прошло', true); return; }
+      if (typeof saveOrderLocal !== 'function') {
+        toast('Модуль данных недоступен — изменение не сохранено', true);
+        return;
+      }
       normalizeOrder(co);
       co.callbackAt = ts;
       co.history.push({

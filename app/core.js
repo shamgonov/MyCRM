@@ -80,6 +80,8 @@ function go(screen, id) {
     toast('Экран недоступен: ' + screen);
     return;
   }
+  // Этап 41: уход с экрана гасит микрофон (он не должен остаться горячим).
+  if (typeof voiceStop === 'function') voiceStop();
   pushNav(screen, id);
   state.screen = screen;
   if (id !== undefined) state.orderId = id;
@@ -123,7 +125,9 @@ function render() {
   const syncChip = (typeof renderSyncStatus === 'function' && state.role) ? renderSyncStatus() : '';
   // Кнопка «Сводка дня» (Этап 39): на экране входа её нет.
   const dgBtn = (typeof renderDigestButton === 'function' && state.role) ? renderDigestButton() : '';
-  app.innerHTML = banner + syncChip + dgBtn + fn();
+  // Кнопка «🎤 Команда» (Этап 41): тоже только после входа.
+  const vcBtn = (typeof renderVoiceCommandBtn === 'function' && state.role) ? renderVoiceCommandBtn() : '';
+  app.innerHTML = banner + syncChip + dgBtn + vcBtn + fn();
   renderNav();
   // Точечная инициализация таймеров обратного отсчёта (Микро-этап): меняем
   // только текст/класс уже отрендеренных span.countdown-timer, без render().
@@ -344,6 +348,8 @@ function showModal(html) {
 }
 
 function closeModal() {
+  // Этап 41: закрытие модалки гасит микрофон (диктовка не должна «висеть»).
+  if (typeof voiceStop === 'function') voiceStop();
   const host = document.getElementById('modal-container');
   if (host) host.innerHTML = '';
 }

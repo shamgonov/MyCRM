@@ -685,3 +685,15 @@ h1, h2, h3, h4, .card, .list-item, .spread, .head-row {
   .dg-scroll { max-height: 58vh; }
   .dg-row-actions .btn { flex: 1 1 auto; }
 }
+
+/* --- Голосовой ввод (Этап 41) --- */
+.vc-mic { flex: 0 0 auto; min-width: 44px; }
+.vc-cmd-wrap { display: flex; justify-content: flex-end; padding: 0 12px 4px; }
+.vc-cmd { flex: 0 0 auto; }
+.vc-field-row { align-items: stretch; }
+.search-row .search-input { flex: 1 1 auto; min-width: 0; }
+.search-row .vc-mic { flex: 0 0 auto; }
+.vc-listening { background: var(--danger); color: #fff; animation: vc-pulse 1.2s infinite; }
+@keyframes vc-pulse { 0%{opacity:1} 50%{opacity:.65} 100%{opacity:1} }
+.vc-hint { font-size: 12px; color: var(--muted); }
+@media (max-width: 767px) { .vc-cmd { width: 100%; } }

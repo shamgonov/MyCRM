@@ -6,10 +6,13 @@ var ORD_SEARCH = ''; // live-поиск по заявкам (Этап 38)
 
 // Поле live-поиска заявок (Этап 38): запрос в ORD_SEARCH, ✕ очищает.
 function renderOrderSearch() {
+  // Этап 41: 🎤 только при загруженном ui-voice.js — иначе разметка прежняя.
+  var mic = (typeof renderVoiceFieldBtn === 'function') ? renderVoiceFieldBtn('ord-search') : '';
   return '<div class="search-row">' +
       '<input type="search" id="ord-search" class="search-input" ' +
         'placeholder="🔍 Поиск по клиенту, телефону, адресу, №..." ' +
         'value="' + escapeHtml(ORD_SEARCH) + '">' +
+      mic +
       (ORD_SEARCH ? '<button class="btn" data-clear-ord-search title="Очистить">✕</button>' : '') +
     '</div>';
 }
@@ -920,13 +923,20 @@ function renderCreateOrderModal() {
   var clients = (DB.clients || []).map(function (c) {
     return '<option value="' + c.id + '">' + escapeHtml(c.name) + '</option>';
   }).join('');
+  // Этап 41: 🎤 у диктуемых полей. Селекты (co-client-id, nc-worker) без микрофона.
+  var mic = function (id) {
+    return (typeof renderVoiceFieldBtn === 'function') ? renderVoiceFieldBtn(id) : '';
+  };
   showModal(
     '<h3>Новая заявка</h3>' +
     '<label class="field"><span>Контрагент</span><select id="co-client-id"><option value="">— вручную —</option>' + clients + '</select></label>' +
     '<label class="field"><span>Исполнитель</span><select id="nc-worker">' + buildWorkerOptions() + '</select></label>' +
-    '<label class="field"><span>Клиент *</span><input id="nc-client" type="text"></label>' +
-    '<label class="field"><span>Телефон</span><input id="nc-phone" type="tel"></label>' +
-    '<label class="field"><span>Адрес</span><input id="nc-address" type="text"></label>' +
+    '<label class="field"><span>Клиент *</span><div class="row">' +
+      '<input id="nc-client" type="text" style="flex:1">' + mic('nc-client') + '</div></label>' +
+    '<label class="field"><span>Телефон</span><div class="row">' +
+      '<input id="nc-phone" type="tel" style="flex:1">' + mic('nc-phone') + '</div></label>' +
+    '<label class="field"><span>Адрес</span><div class="row">' +
+      '<input id="nc-address" type="text" style="flex:1">' + mic('nc-address') + '</div></label>' +
     '<label class="field"><span>Дата</span><input id="nc-date" type="date" value="' + localToday() + '"></label>' +
     '<div class="row">' +
       '<label class="field" style="flex:1"><span>Время с</span><input id="nc-t1" type="time" value="09:00"></label>' +
@@ -944,14 +954,21 @@ function renderCreateOrderModal() {
 // смешивались с модалкой создания (они живут в одном document).
 function renderEditOrderModal(o) {
   if (!o) return;
+  // Этап 41: 🎤 у диктуемых полей (телефон нормализуется в ui-voice.js).
+  var mic = function (id) {
+    return (typeof renderVoiceFieldBtn === 'function') ? renderVoiceFieldBtn(id) : '';
+  };
   showModal(
     '<h3>✎ Редактировать заявку №' + escapeHtml(orderDisplayNumber(o)) + '</h3>' +
-    '<label class="field"><span>Клиент *</span><input id="eo-client" type="text" value="' +
-      escapeHtml(o.client || '') + '"></label>' +
-    '<label class="field"><span>Телефон</span><input id="eo-phone" type="tel" value="' +
-      escapeHtml(o.phone || '') + '"></label>' +
-    '<label class="field"><span>Адрес</span><input id="eo-address" type="text" value="' +
-      escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '"></label>' +
+    '<label class="field"><span>Клиент *</span><div class="row">' +
+      '<input id="eo-client" type="text" style="flex:1" value="' +
+      escapeHtml(o.client || '') + '">' + mic('eo-client') + '</div></label>' +
+    '<label class="field"><span>Телефон</span><div class="row">' +
+      '<input id="eo-phone" type="tel" style="flex:1" value="' +
+      escapeHtml(o.phone || '') + '">' + mic('eo-phone') + '</div></label>' +
+    '<label class="field"><span>Адрес</span><div class="row">' +
+      '<input id="eo-address" type="text" style="flex:1" value="' +
+      escapeHtml([o.city, o.address].filter(Boolean).join(', ')) + '">' + mic('eo-address') + '</div></label>' +
     '<label class="field"><span>Дата</span><input id="eo-date" type="date" value="' +
       escapeHtml(o.date || '') + '"></label>' +
     '<div class="row">' +
