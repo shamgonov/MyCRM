@@ -157,21 +157,47 @@ var mqMob = mediaBlock('@media (max-width: 767px)');
 assert(mqMob.length > 0, '3.4: мобильный @media (max-width: 767px) найден');
 
 function mqRule(selRe) {
-  var m = mqMob.match(new RegExp(selRe + '\\s*\\{([^}]*)\\}'));
+  var m = mqMob.match(new RegExp(selRe + '(?![\\w+-])\\s*,?[^{]*\\{([^}]*)\\}'));
   return m ? m[1] : '';
 }
 // Заголовок занимает всю строку (не выталкивает кнопку).
 var mSpreadH2 = mqRule('\\.spread\\s*>\\s*h2');
 assert(mSpreadH2.indexOf('flex: 1 1 100%') >= 0, '3.4: в @media .spread > h2 на всю строку');
 assert(mSpreadH2.indexOf('min-width: 0') >= 0, '3.4: в @media у заголовка min-width: 0');
-// Кнопка переносится под заголовок и растягивается на всю ширину.
-var mSpreadBtn = mqRule('\\.spread\\s*>\\s*\\.btn');
-assert(mSpreadBtn.indexOf('flex: 1 1 100%') >= 0, '3.4: в @media .spread > .btn на всю ширину');
-// Шапка карточки: кнопка «←» слева, заголовок ниже, бейдж — порядок задан.
-assert(mqRule('\\.head-row\\s*>\\s*h2').indexOf('flex: 1 1 100%') >= 0,
-  '3.4: в @media .head-row > h2 на всю строку');
-assert(mqRule('\\.head-row\\s*>\\s*\\.btn').indexOf('order: 1') >= 0,
-  '3.4: в @media кнопка «←» идёт первой в шапке');
+// Кнопка после заголовка переносится под него и растягивается на всю ширину.
+var mSpreadH2Btn = mqRule('\\.spread\\s*>\\s*h2\\s*\\+\\s*\\.btn');
+assert(mSpreadH2Btn.indexOf('width: 100%') >= 0,
+  '3.4: в @media кнопка после заголовка на всю ширину');
+// Вкладка «Поставщики» (h2 + кнопка) чинится тем же правилом (Этап 35).
+assert(mqRule('\\.spread\\s*>\\s*h4\\s*\\+\\s*\\.btn').indexOf('width: 100%') >= 0,
+  '3.4: в @media h4-шапки (Админка) тоже получают широкую кнопку');
+// Шапка карточки: заголовок на всю строку, кнопки ниже; order не ставим
+// (в календаре .head-row без h2 — order разъехал бы панель «‹ [дата] ›»).
+var mHeadH2 = mqRule('\\.head-row\\s*>\\s*h2');
+assert(mHeadH2.indexOf('flex: 1 1 100%') >= 0, '3.4: в @media .head-row > h2 на всю строку');
+assert(mqMob.indexOf('order:') < 0, '3.4: в @media нет order (панель календаря цела)');
+
+// --- 3.5 Этап 35: жёсткий перенос длинных слов, без column-регрессий ---
+
+// Глобальный блок: длинные слова (юрлица без пробелов, email, ссылки)
+// рвутся, а не растягивают контейнер; flex-дети могут сжиматься.
+// Селектор — список (h1,h2,h3,h4,.card,.list-item,.spread,.head-row),
+// хвост списка [^{]* не перепрыгивает '{' (образец — chipItem выше).
+var wbRule = ruleBody('h1,\\s*h2,\\s*h3,\\s*h4[^{]*');
+assert(wbRule.indexOf('word-break: break-word') >= 0,
+  '3.5: глобально word-break: break-word для заголовков/карточек');
+assert(wbRule.indexOf('overflow-wrap: anywhere') >= 0,
+  '3.5: глобально overflow-wrap: anywhere (рвёт даже слова без пробелов)');
+assert(wbRule.indexOf('min-width: 0') >= 0,
+  '3.5: глобально min-width: 0 (flex-дети сжимаются ниже контента)');
+// Регрессия: глобальный column для всех .spread запрещён — разъехал бы
+// строки карточек (<b>название</b> + <span>сумма</span>) во всех списках.
+assert(css.indexOf('.spread {\n    flex-direction: column') < 0 &&
+       !/\.spread\s*\{\s*\n?\s*flex-direction:\s*column/.test(css),
+  '3.5: нет глобального flex-direction: column для .spread (строки карточек целы)');
+// .head-row > .btn без order — DOM-порядок («←», заголовок, бейдж) верный.
+assert(mqRule('\\.head-row\\s*>\\s*\\.btn') === '',
+  '3.5: в @media нет правила .head-row > .btn (order убран)');
 
 // --- 4. Нижняя навигация ---
 
