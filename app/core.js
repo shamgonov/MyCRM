@@ -121,7 +121,9 @@ function render() {
   const banner = (typeof renderAccessBanner === 'function') ? renderAccessBanner() : '';
   // Индикатор статуса синхронизации (Этап 25): показываем только после входа.
   const syncChip = (typeof renderSyncStatus === 'function' && state.role) ? renderSyncStatus() : '';
-  app.innerHTML = banner + syncChip + fn();
+  // Кнопка «Сводка дня» (Этап 39): на экране входа её нет.
+  const dgBtn = (typeof renderDigestButton === 'function' && state.role) ? renderDigestButton() : '';
+  app.innerHTML = banner + syncChip + dgBtn + fn();
   renderNav();
   // Точечная инициализация таймеров обратного отсчёта (Микро-этап): меняем
   // только текст/класс уже отрендеренных span.countdown-timer, без render().

@@ -1139,7 +1139,14 @@ document.addEventListener('click', function (ev) {
   }
 
   const card = sel('[data-order]');
-  if (card) { ORD_TAB = 'main'; go('order', Number(card.getAttribute('data-order'))); return; }
+  if (card) {
+    // Этап 39: строка сводки может открыть конкретную вкладку карточки
+    // (data-order-tab="money"/"materials"). Без атрибута — как раньше 'main'.
+    const wantTab = card.getAttribute('data-order-tab');
+    ORD_TAB = wantTab ? wantTab : 'main';
+    go('order', Number(card.getAttribute('data-order')));
+    return;
+  }
 
   const chip = sel('[data-filter]');
   if (chip) { state.filter = chip.getAttribute('data-filter'); render(); return; }

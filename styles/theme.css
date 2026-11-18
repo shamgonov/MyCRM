@@ -538,3 +538,150 @@ h1, h2, h3, h4, .card, .list-item, .spread, .head-row {
   overflow-wrap: anywhere;
   min-width: 0;
 }
+
+/* --- Сводка дня (Этап 39) ---
+   Всё внутри окна на собственных .dg-* классах: .spread/.head-row здесь
+   не используются (конфликт с !important-правилами Этапа 37). */
+.dg-entry-wrap { display: flex; justify-content: flex-end; padding: 0 12px 4px; }
+.dg-entry { position: relative; }
+.dg-entry-badge {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+
+.dg-wrap { display: flex; flex-direction: column; max-width: 100%; }
+
+.dg-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--card);
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.dg-head-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dg-title { font-size: 15px; }
+.dg-date { color: var(--muted); font-size: 12px; }
+.dg-role {
+  font-size: 11px;
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+}
+.dg-sync {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.dg-spacer { flex: 1 1 auto; }
+
+.dg-tabs { display: flex; gap: 6px; margin-top: 8px; overflow-x: auto; scrollbar-width: none; }
+.dg-tabs::-webkit-scrollbar { display: none; }
+.dg-tab { flex: 0 0 auto; font-size: 12px; }
+.dg-tab-active { background: var(--accent); color: var(--accent-ink); border-color: transparent; }
+
+.dg-scroll {
+  max-height: 62vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 12px;
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) var(--card);
+}
+.dg-scroll::-webkit-scrollbar { width: 6px; }
+.dg-scroll::-webkit-scrollbar-track { background: var(--card); border-radius: 999px; }
+.dg-scroll::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+.dg-scroll::-webkit-scrollbar-thumb:hover { background: var(--accent); }
+
+.dg-kpi { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 8px; }
+.dg-kpi-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: left;
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  color: inherit;
+  font: inherit;
+  padding: 8px 10px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.dg-kpi-item:hover { border-color: var(--accent); }
+.dg-kpi-static { cursor: default; }
+.dg-kpi-label { font-size: 11px; color: var(--muted); }
+.dg-kpi-num { font-size: 22px; font-weight: 700; line-height: 1.1; }
+.dg-kpi-warn .dg-kpi-num { color: var(--warn); }
+.dg-kpi-danger .dg-kpi-num { color: var(--danger); }
+.dg-kpi-muted .dg-kpi-num { color: var(--muted); }
+
+.dg-sec { border: 1px solid var(--line); border-radius: var(--radius-sm); margin-top: 8px; overflow: hidden; }
+.dg-sec-head {
+  display: flex;
+  width: 100%;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  font: inherit;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.dg-sec-head-static { cursor: default; }
+.dg-sec-title { font-size: 13px; font-weight: 600; flex: 1 1 auto; }
+.dg-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--card-2);
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+.dg-caret { color: var(--muted); transition: transform .15s; }
+.dg-sec.dg-open .dg-caret { transform: rotate(180deg); }
+.dg-body { display: none; padding: 0 12px 10px; }
+.dg-sec.dg-open .dg-body { display: block; }
+
+.dg-row { padding: 8px 0; border-top: 1px solid var(--line); }
+.dg-row:first-child { border-top: 0; }
+.dg-row-top { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dg-row-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.dg-row-badges:empty { display: none; }
+.dg-row-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.dg-row-actions .btn { flex: 0 0 auto; font-size: 12px; padding: 4px 8px; }
+.dg-empty { color: var(--muted); font-size: 12px; padding: 6px 0; }
+
+.dg-foot {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 6px;
+  background: var(--card);
+  border-top: 1px solid var(--line);
+  padding: 10px 12px;
+}
+.dg-foot .btn { flex: 1 1 auto; min-width: 0; }
+
+@media (max-width: 767px) {
+  .dg-kpi { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dg-scroll { max-height: 58vh; }
+  .dg-row-actions .btn { flex: 1 1 auto; }
+}

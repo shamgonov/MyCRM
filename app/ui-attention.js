@@ -280,7 +280,11 @@ function delegateClicks() {
     if (call) {
       const branch = call.getAttribute('data-call-result');
       if (branch === 'start') return;
-      const o = (DB.orders || []).find(function (x) { return x.id === state.orderId; });
+      // Этап 39: заявку можно указать атрибутом data-order-id (строка сводки).
+      // Без атрибута — прежнее поведение по state.orderId.
+      const attrId = call.getAttribute('data-order-id');
+      const targetId = attrId ? Number(attrId) : state.orderId;
+      const o = (DB.orders || []).find(function (x) { return x.id === targetId; });
       if (!o) { toast('Нет открытой заявки', true); return; }
       const res = applyCallResult(o, call.getAttribute('data-call-result'));
       // Ветка 'later_custom' сама открыла модалку выбора даты — не закрываем
