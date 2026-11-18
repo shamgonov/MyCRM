@@ -445,33 +445,48 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
-/* --- Мобильные заголовки и кнопки действий (Этап 34.1, 35) ---
-   На узких экранах заголовок шапки занимает всю строку, поэтому кнопка
-   действия переносится ниже и растягивается на всю ширину. Так
-   «➕ Контрагент» / «➕ Поставщик» гарантированно видны и не вылезает за
-   правый край (overflow-x: hidden резал бы их). Точечно по заголовкам:
-   строки карточек (<b>название</b> + <span>сумма</span>) заголовка не
-   содержат и не разъезжаются. Глобальный flex-direction: column не
-   применяем — он сломал бы именно эти строки во всех списках. */
+/* --- Жёсткая адаптация шапок под мобильные (Этап 34.1, 35, 36) ---
+   На узких экранах шапка экрана собирается вертикально: заголовок сверху,
+   кнопка действия строго под ним на всю ширину. !important перебивает
+   базовые и инлайн-настройки — кнопка больше физически не может уйти за
+   правый край. Исключение — строки внутри карточек (имя + статус/сумма):
+   они остаются в строку, иначе вертикаль разъела бы все списки. */
 @media (max-width: 767px) {
+  .spread {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
   .spread > h2,
   .spread > h3,
   .spread > h4 {
-    flex: 1 1 100%;
-    min-width: 0;
-    margin: 0;
+    width: 100% !important;
+    margin: 0 !important;
+    min-width: 0 !important;
+    text-align: left !important;
   }
-  .spread > h2 + .btn,
-  .spread > h3 + .btn,
-  .spread > h4 + .btn {
-    width: 100%;
-    max-width: 100%;
-    text-align: center;
+  .spread > .btn {
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    margin-top: 0 !important;
+    text-align: center !important;
   }
-  /* Шапка карточки: заголовок на всю строку, кнопки («←», ✎, бейдж) ниже.
-     order не ставим: DOM-порядок в карточке уже верный («←», заголовок,
-     бейдж), а в календаре (.head-row с ‹ [дата] › Сегодня, без h2) order
-     разъехал бы стрелки. Заголовка h2 в календаре нет — панель не тронута. */
+  /* Строки карточек (списки заявок/задач/закупок/контрагентов):
+     название и статус/сумма по-прежнему в одну строку. */
+  .list-item .spread {
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .list-item .spread > .btn {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    text-align: center !important;
+  }
+  /* Шапка карточки: заголовок на свою строку, кнопки («←», ✎, бейдж)
+     ниже; order не ставим — в календаре там панель «‹ [дата] › Сегодня». */
   .head-row > h2 {
     flex: 1 1 100%;
     min-width: 0;

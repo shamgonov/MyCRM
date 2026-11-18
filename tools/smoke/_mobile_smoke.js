@@ -160,24 +160,36 @@ function mqRule(selRe) {
   var m = mqMob.match(new RegExp(selRe + '(?![\\w+-])\\s*,?[^{]*\\{([^}]*)\\}'));
   return m ? m[1] : '';
 }
-// Заголовок занимает всю строку (не выталкивает кнопку).
+// Шапка экрана собирается вертикально: заголовок сверху, кнопка под ним.
+// Базовое .spread { … } — первое правило внутри медиа-блока.
+var mSpread = (mqMob.match(/\.spread\s*\{([^}]*)\}/) || ['', ''])[1];
+assert(mSpread.indexOf('flex-direction: column !important') >= 0,
+  '3.4: в @media .spread → flex-direction: column !important');
+assert(mSpread.indexOf('align-items: stretch !important') >= 0,
+  '3.4: в @media .spread → align-items: stretch !important');
 var mSpreadH2 = mqRule('\\.spread\\s*>\\s*h2');
-assert(mSpreadH2.indexOf('flex: 1 1 100%') >= 0, '3.4: в @media .spread > h2 на всю строку');
-assert(mSpreadH2.indexOf('min-width: 0') >= 0, '3.4: в @media у заголовка min-width: 0');
-// Кнопка после заголовка переносится под него и растягивается на всю ширину.
-var mSpreadH2Btn = mqRule('\\.spread\\s*>\\s*h2\\s*\\+\\s*\\.btn');
-assert(mSpreadH2Btn.indexOf('width: 100%') >= 0,
-  '3.4: в @media кнопка после заголовка на всю ширину');
-// Вкладка «Поставщики» (h2 + кнопка) чинится тем же правилом (Этап 35).
-assert(mqRule('\\.spread\\s*>\\s*h4\\s*\\+\\s*\\.btn').indexOf('width: 100%') >= 0,
-  '3.4: в @media h4-шапки (Админка) тоже получают широкую кнопку');
-// Шапка карточки: заголовок на всю строку, кнопки ниже; order не ставим
-// (в календаре .head-row без h2 — order разъехал бы панель «‹ [дата] ›»).
+assert(mSpreadH2.indexOf('width: 100% !important') >= 0,
+  '3.4: в @media .spread > h2 → width: 100% !important');
+assert(mSpreadH2.indexOf('min-width: 0 !important') >= 0,
+  '3.4: в @media у заголовка min-width: 0 !important');
+var mSpreadBtn = mqRule('\\.spread\\s*>\\s*\\.btn');
+assert(mSpreadBtn.indexOf('width: 100% !important') >= 0,
+  '3.4: в @media .spread > .btn → width: 100% !important');
+assert(mSpreadBtn.indexOf('flex: 1 1 100% !important') >= 0,
+  '3.4: в @media кнопка растягивается на всю ширину');
+// Строки карточек (списки заявок/задач/закупок) НЕ разъезжаются вертикально.
+var mRowSpread = (mqMob.match(/\.list-item \.spread\s*\{([^}]*)\}/) || ['', ''])[1];
+assert(mRowSpread.indexOf('flex-direction: row !important') >= 0,
+  '3.4: в @media .list-item .spread остаётся строкой (списки целы)');
+var mRowBtn = mqRule('\\.list-item \\.spread\\s*>\\s*\\.btn');
+assert(mRowBtn.indexOf('width: auto !important') >= 0,
+  '3.4: в @media кнопки в строках карточек не на всю ширину');
+// Шапка карточки: заголовок на свою строку; order не ставим (календарь).
 var mHeadH2 = mqRule('\\.head-row\\s*>\\s*h2');
 assert(mHeadH2.indexOf('flex: 1 1 100%') >= 0, '3.4: в @media .head-row > h2 на всю строку');
 assert(mqMob.indexOf('order:') < 0, '3.4: в @media нет order (панель календаря цела)');
 
-// --- 3.5 Этап 35: жёсткий перенос длинных слов, без column-регрессий ---
+// --- 3.5 Этап 35: жёсткий перенос длинных слов ---
 
 // Глобальный блок: длинные слова (юрлица без пробелов, email, ссылки)
 // рвутся, а не растягивают контейнер; flex-дети могут сжиматься.
@@ -190,11 +202,6 @@ assert(wbRule.indexOf('overflow-wrap: anywhere') >= 0,
   '3.5: глобально overflow-wrap: anywhere (рвёт даже слова без пробелов)');
 assert(wbRule.indexOf('min-width: 0') >= 0,
   '3.5: глобально min-width: 0 (flex-дети сжимаются ниже контента)');
-// Регрессия: глобальный column для всех .spread запрещён — разъехал бы
-// строки карточек (<b>название</b> + <span>сумма</span>) во всех списках.
-assert(css.indexOf('.spread {\n    flex-direction: column') < 0 &&
-       !/\.spread\s*\{\s*\n?\s*flex-direction:\s*column/.test(css),
-  '3.5: нет глобального flex-direction: column для .spread (строки карточек целы)');
 // .head-row > .btn без order — DOM-порядок («←», заголовок, бейдж) верный.
 assert(mqRule('\\.head-row\\s*>\\s*\\.btn') === '',
   '3.5: в @media нет правила .head-row > .btn (order убран)');
