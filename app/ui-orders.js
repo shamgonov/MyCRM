@@ -2,6 +2,18 @@
    Зависит: db.js, auth.js, gates.js, orders.js, core.js (go/render/showModal/toast). */
 'use strict';
 
+var ORD_SEARCH = ''; // live-поиск по заявкам (Этап 38)
+
+// Поле live-поиска заявок (Этап 38): запрос в ORD_SEARCH, ✕ очищает.
+function renderOrderSearch() {
+  return '<div class="search-row">' +
+      '<input type="search" id="ord-search" class="search-input" ' +
+        'placeholder="🔍 Поиск по клиенту, телефону, адресу, №..." ' +
+        'value="' + escapeHtml(ORD_SEARCH) + '">' +
+      (ORD_SEARCH ? '<button class="btn" data-clear-ord-search title="Очистить">✕</button>' : '') +
+    '</div>';
+}
+
 // Русские названия статусов + цвет бейджа.
 const STATUS_LABELS = {
   new: 'Новая', inspection: 'Осмотр', estimate: 'Смета', approved: 'Согласована',
@@ -136,9 +148,24 @@ function renderOrdersList() {
   const f = state.filter || 'all';
 
   // Видимость: право на все заявки либо «мои» (гейты не обходятся).
-  const rows = all
+  const visible = all
     .filter(function (o) { return canViewOrder(o); })
     .filter(function (o) { return orderPassesFilter(o, f); });
+
+  // Live-поиск (Этап 38): клиент / телефон / адрес / номер / мастер.
+  // Семантика фильтров (state.filter) не меняется — поиск применяется поверх.
+  const oq = String(ORD_SEARCH || '').toLowerCase();
+  const rows = oq
+    ? visible.filter(function (o) {
+        return (o.client || '').toLowerCase().indexOf(oq) >= 0 ||
+               (o.phone || '').toLowerCase().indexOf(oq) >= 0 ||
+               (o.address || '').toLowerCase().indexOf(oq) >= 0 ||
+               (o.city || '').toLowerCase().indexOf(oq) >= 0 ||
+               (o.worker || '').toLowerCase().indexOf(oq) >= 0 ||
+               String(o.id).indexOf(oq) >= 0 ||
+               String(orderDisplayNumber(o)).indexOf(oq) >= 0;
+      })
+    : visible;
 
   const chips = [
     ['all', 'Все'], ['pool', '🤝 Пул'], ['today', 'Сегодня'],
@@ -159,7 +186,9 @@ function renderOrdersList() {
 
   const cards = rows.length
     ? rows.map(renderOrderListItem).join('')
-    : '<p class="muted">Заявок нет по этому фильтру.</p>';
+    : (oq
+        ? '<p class="muted">Ничего не найдено по запросу «' + escapeHtml(ORD_SEARCH) + '»</p>'
+        : '<p class="muted">Заявок нет по этому фильтру.</p>');
 
   // Баннер напоминаний (Этап 9) живёт в notify.js — он грузится позже этого
   // модуля, поэтому ленивый вызов: без notify.js список работает как раньше.
@@ -170,6 +199,7 @@ function renderOrdersList() {
       '<button class="btn btn-primary" data-create-modal title="Новая заявка">➕</button>' +
     '</div>' +
     bar +
+    renderOrderSearch() +
     '<div class="chips">' + chips + '</div>' +
     tagFilter +
     '<div class="list">' + cards + '</div>';
@@ -893,8 +923,25 @@ function renderEditOrderModal(o) {
 
 // --- Делегирование событий этого модуля ---
 
+// Live-поиск заявок (Этап 38): debounce 300ms, фокус возвращаем после render().
+document.addEventListener('input', debounce(function (ev) {
+  const el = ev.target;
+  if (!el || el.id !== 'ord-search') return;
+  ORD_SEARCH = String(el.value || '').trim();
+  render();
+  const again = document.getElementById('ord-search');
+  if (!again) return;
+  try {
+    again.focus();
+    again.setSelectionRange(again.value.length, again.value.length);
+  } catch (e) { /* без позиции каретки */ }
+}, 300));
+
 document.addEventListener('click', function (ev) {
   const sel = function (s) { return ev.target.closest(s); };
+
+  // Очистка поиска заявок (Этап 38).
+  if (sel('[data-clear-ord-search]')) { ORD_SEARCH = ''; render(); return; }
 
   const createBtn = sel('[data-create-modal]');
   if (createBtn) { renderCreateOrderModal(); return; }

@@ -6,6 +6,18 @@
 
 // Активный таб админки (переживает перерисовки, как ORD_TAB в ui-orders.js).
 var ADMIN_TAB = 'employees';
+var ADMIN_SUP_SEARCH = '';   // live-поиск в админке: поставщики (Этап 38)
+var PRICE_SEARCH = ''; // live-поиск в админке: прайс (Этап 38)
+
+// Поле live-поиска для админки (Этап 38): id, значение, плейсхолдер,
+// data-атрибут кнопки очистки.
+function adminSearchRow(id, value, placeholder, clearAttr) {
+  return '<div class="search-row">' +
+      '<input type="search" id="' + id + '" class="search-input" ' +
+        'placeholder="' + placeholder + '" value="' + escapeHtml(value) + '">' +
+      (value ? '<button class="btn" ' + clearAttr + ' title="Очистить">✕</button>' : '') +
+    '</div>';
+}
 
 const ADMIN_ROLES = ['admin', 'manager', 'operator', 'worker'];
 const ROLE_LABELS = { admin: 'Админ', manager: 'Менеджер', operator: 'Оператор', worker: 'Мастер' };
@@ -123,7 +135,16 @@ function renderAdminRequisites() {
 // --- 4. Прайс-лист ---
 
 function renderAdminPrice() {
-  const items = DB.priceList || [];
+  const all = DB.priceList || [];
+  // Live-поиск (Этап 38): название / категория / ед. изм.
+  const pq = String(PRICE_SEARCH || '').toLowerCase();
+  const items = pq
+    ? all.filter(function (p) {
+        return (p.name || '').toLowerCase().indexOf(pq) >= 0 ||
+               (p.category || '').toLowerCase().indexOf(pq) >= 0 ||
+               (p.unit || '').toLowerCase().indexOf(pq) >= 0;
+      })
+    : all;
   const rows = items.map(function (p) {
     return arow([
       escapeHtml(p.name || '—'),
@@ -135,12 +156,18 @@ function renderAdminPrice() {
         '<button class="btn btn-danger" data-delete-price="' + p.id + '" title="Удалить">🗑</button>' +
       '</span>'
     ], false, COLS_PRICE);
-  }).join('') || '<p class="muted">Прайс-лист пуст.</p>';
+  }).join('') || (pq
+    ? '<p class="muted">Ничего не найдено по запросу «' + escapeHtml(PRICE_SEARCH) + '»</p>'
+    : '<p class="muted">Прайс-лист пуст.</p>');
 
   return '<div class="card">' +
       '<div class="spread"><h4>Прайс-лист</h4>' +
         '<button class="btn btn-primary" data-add-price>➕ Добавить позицию</button>' +
       '</div>' +
+      // id отличается от #price-search модалки ui-estimate.js (Этап 17):
+      // иначе ввод в модалке «Работа из прайса» засорял бы PRICE_SEARCH.
+      adminSearchRow('admin-price-search', PRICE_SEARCH,
+        '🔍 Поиск по названию, категории, ед. изм...', 'data-clear-price-search') +
       arow(['Название', 'Категория', 'Цена', 'Ед.', 'Действия'], true, COLS_PRICE) +
       rows +
     '</div>';
@@ -177,7 +204,17 @@ function renderPriceModal(item) {
 // --- 5. Поставщики (Этап 18) ---
 
 function renderAdminSuppliers() {
-  const sups = DB.suppliers || [];
+  const all = DB.suppliers || [];
+  // Live-поиск (Этап 38): название / телефон / адрес / часы.
+  const sq = String(ADMIN_SUP_SEARCH || '').toLowerCase();
+  const sups = sq
+    ? all.filter(function (s) {
+        return (s.name || '').toLowerCase().indexOf(sq) >= 0 ||
+               (s.phone || '').toLowerCase().indexOf(sq) >= 0 ||
+               (s.address || '').toLowerCase().indexOf(sq) >= 0 ||
+               (s.hours || '').toLowerCase().indexOf(sq) >= 0;
+      })
+    : all;
   const rows = sups.map(function (s) {
     return arow([
       escapeHtml(s.name || '—'),
@@ -189,12 +226,16 @@ function renderAdminSuppliers() {
         '<button class="btn btn-danger" data-delete-supplier="' + s.id + '" title="Удалить">🗑</button>' +
       '</span>'
     ], false, COLS_SUPP);
-  }).join('') || '<p class="muted">Поставщиков нет.</p>';
+  }).join('') || (sq
+    ? '<p class="muted">Ничего не найдено по запросу «' + escapeHtml(ADMIN_SUP_SEARCH) + '»</p>'
+    : '<p class="muted">Поставщиков нет.</p>');
 
   return '<div class="card">' +
       '<div class="spread"><h4>Поставщики</h4>' +
         '<button class="btn btn-primary" data-add-supplier>➕ Добавить поставщика</button>' +
       '</div>' +
+      adminSearchRow('sup-search', ADMIN_SUP_SEARCH,
+        '🔍 Поиск по названию, телефону, адресу...', 'data-clear-sup-search') +
       arow(['Название', 'Телефон', 'Адрес', 'Часы работы', 'Действия'], true, COLS_SUPP) +
       rows +
     '</div>' +
@@ -360,8 +401,39 @@ function deletePriceItem(id) {
 
 // --- Делегирование событий ---
 
+// Live-поиск в админке (Этап 38): прайс и поставщики, debounce 300ms.
+// Фокус возвращаем после render() — поле пересоздаётся.
+function restoreSearchFocus(id) {
+  const again = document.getElementById(id);
+  if (!again) return;
+  try {
+    again.focus();
+    again.setSelectionRange(again.value.length, again.value.length);
+  } catch (e) { /* без позиции каретки */ }
+}
+
+document.addEventListener('input', debounce(function (ev) {
+  const el = ev.target;
+  if (!el) return;
+  if (el.id === 'sup-search') {
+    ADMIN_SUP_SEARCH = String(el.value || '').trim();
+    render();
+    restoreSearchFocus('sup-search');
+    return;
+  }
+  if (el.id === 'admin-price-search') {
+    PRICE_SEARCH = String(el.value || '').trim();
+    render();
+    restoreSearchFocus('admin-price-search');
+  }
+}, 300));
+
 document.addEventListener('click', function (ev) {
   const sel = function (s) { return ev.target.closest(s); };
+
+  // Очистка поиска (Этап 38).
+  if (sel('[data-clear-sup-search]')) { ADMIN_SUP_SEARCH = ''; render(); return; }
+  if (sel('[data-clear-price-search]')) { PRICE_SEARCH = ''; render(); return; }
 
   const tab = sel('[data-admin-tab]');
   if (tab) { ADMIN_TAB = tab.getAttribute('data-admin-tab'); render(); return; }

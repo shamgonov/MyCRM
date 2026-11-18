@@ -445,6 +445,25 @@ input:focus, select:focus, textarea:focus {
   }
 }
 
+/* --- Панель live-поиска (Этап 38) ---
+   Строка поиска над списком: поле тянется, кнопка ✕ не сжимается.
+   input[type=search] наследует базовые стили полей (см. input, select). */
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.search-row > .search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.search-row > .btn {
+  flex: 0 0 auto;
+}
+/* Убираем нативные «крестики» — очистка своя кнопкой ✕. */
+.search-input::-webkit-search-cancel-button { display: none; }
+
 /* --- Панель действий шапки (Этап 36) ---
    Кнопки добавления вынесены из .spread в отдельный блок под заголовком:
    на телефоне панель занимает всю ширину, кнопка внутри — тоже. Работает

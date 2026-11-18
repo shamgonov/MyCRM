@@ -409,6 +409,19 @@ document.addEventListener('click', function (ev) {
   }
 });
 
+// Debounce для live-поиска (Этап 38): откладывает вызов fn на ms после
+// последнего события — при вводе текста перерисовка идёт не на каждую букву.
+function debounce(fn, ms) {
+  var timer = null;
+  return function () {
+    var args = arguments;
+    var ctx = this;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(function () { fn.apply(ctx, args); }, ms);
+  };
+}
+window.debounce = debounce;
+
 // --- Старт: все модули подключены обычными <script>, ждём готовности DOM
 // (ui-orders.js идёт после core.js, поэтому первый render откладывается).
 

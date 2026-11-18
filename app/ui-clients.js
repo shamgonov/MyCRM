@@ -3,6 +3,8 @@
 'use strict';
 
 var CL_TAB = 'list'; // 'list' | 'card' | 'suppliers'
+var CL_SEARCH = '';  // live-поиск по контрагентам (Этап 38)
+var SUP_SEARCH = ''; // live-поиск по поставщикам на вкладке (Этап 38)
 
 // --- 1. Экран «Контрагенты» ---
 
@@ -29,6 +31,17 @@ function renderClientsTabs() {
 
 function renderClientList() {
   var list = DB.clients || [];
+  // Live-поиск (Этап 38): имя / телефон / адрес / город.
+  var q = String(CL_SEARCH || '').toLowerCase();
+  if (q) {
+    list = list.filter(function (c) {
+      return (c.name || '').toLowerCase().indexOf(q) >= 0 ||
+             (c.phone || '').toLowerCase().indexOf(q) >= 0 ||
+             (c.address || '').toLowerCase().indexOf(q) >= 0 ||
+             (c.city || '').toLowerCase().indexOf(q) >= 0 ||
+             (c.email || '').toLowerCase().indexOf(q) >= 0;
+    });
+  }
   var rows = list.map(function (c) {
     var count = (c.orderIds || []).length;
     return '<div class="list-item" data-client="' + c.id + '">' +
@@ -55,10 +68,24 @@ function renderClientList() {
         '</div>'
       : '') +
     renderClientsTabs() +
+    renderClientSearch() +
     '<div class="card">' +
       (rows.length
         ? '<div class="list">' + rows.join('') + '</div>'
-        : '<p class="muted">Контрагентов пока нет.</p>') +
+        : (q
+            ? '<p class="muted">Ничего не найдено по запросу «' + escapeHtml(CL_SEARCH) + '»</p>'
+            : '<p class="muted">Контрагентов пока нет.</p>')) +
+    '</div>';
+}
+
+// Поле live-поиска контрагентов (Этап 38). Значение хранится в CL_SEARCH,
+// поэтому после render() ввод сохраняется; ✕ очищает запрос.
+function renderClientSearch() {
+  return '<div class="search-row">' +
+      '<input type="search" id="cl-search" class="search-input" ' +
+        'placeholder="🔍 Поиск по имени, телефону, адресу..." ' +
+        'value="' + escapeHtml(CL_SEARCH) + '">' +
+      (CL_SEARCH ? '<button class="btn" data-clear-search title="Очистить">✕</button>' : '') +
     '</div>';
 }
 
@@ -75,6 +102,16 @@ function clientKindLabel(k) {
 
 function renderSuppliersTab() {
   var sups = DB.suppliers || [];
+  // Live-поиск (Этап 38): название / телефон / адрес / заметка.
+  var sq = String(SUP_SEARCH || '').toLowerCase();
+  if (sq) {
+    sups = sups.filter(function (s) {
+      return (s.name || '').toLowerCase().indexOf(sq) >= 0 ||
+             (s.phone || '').toLowerCase().indexOf(sq) >= 0 ||
+             (s.address || '').toLowerCase().indexOf(sq) >= 0 ||
+             (s.note || '').toLowerCase().indexOf(sq) >= 0;
+    });
+  }
   // Единый критерий экрана: справочники ведёт роль с clients_edit
   // (admin/operator/manager); worker экраном контрагентов не управляет.
   var editable = can('clients_edit');
@@ -109,9 +146,22 @@ function renderSuppliersTab() {
         '</div>'
       : '') +
     renderClientsTabs() +
+    renderSupplierSearch() +
     '<div class="card">' +
       (rows ? '<div class="list">' + rows + '</div>'
-            : '<p class="muted">Поставщиков пока нет.</p>') +
+            : (SUP_SEARCH
+                ? '<p class="muted">Ничего не найдено по запросу «' + escapeHtml(SUP_SEARCH) + '»</p>'
+                : '<p class="muted">Поставщиков пока нет.</p>')) +
+    '</div>';
+}
+
+// Поле live-поиска поставщиков на вкладке «🚚 Поставщики» (Этап 38).
+function renderSupplierSearch() {
+  return '<div class="search-row">' +
+      '<input type="search" id="sup-tab-search" class="search-input" ' +
+        'placeholder="🔍 Поиск по названию, телефону, адресу..." ' +
+        'value="' + escapeHtml(SUP_SEARCH) + '">' +
+      (SUP_SEARCH ? '<button class="btn" data-clear-sup-tab-search title="Очистить">✕</button>' : '') +
     '</div>';
 }
 
@@ -407,6 +457,35 @@ function buildClientDossier(client) {
 
 // --- Делегирование ---
 
+// Live-поиск контрагентов (Этап 38): debounce 300ms — перерисовка не на
+// каждую букву. render() пересоздаёт поле, поэтому фокус возвращаем сами.
+document.addEventListener('input', debounce(function (ev) {
+  var el = ev.target;
+  if (!el) return;
+  if (el.id === 'sup-tab-search') {
+    SUP_SEARCH = String(el.value || '').trim();
+    render();
+    var again = document.getElementById('sup-tab-search');
+    if (again) {
+      try {
+        again.focus();
+        again.setSelectionRange(again.value.length, again.value.length);
+      } catch (e) { /* без позиции каретки */ }
+    }
+    return;
+  }
+  if (el.id !== 'cl-search') return;
+  CL_SEARCH = String(el.value || '').trim();
+  render();
+  var again2 = document.getElementById('cl-search');
+  if (again2) {
+    try {
+      again2.focus();
+      again2.setSelectionRange(again2.value.length, again2.value.length);
+    } catch (e) { /* старые браузеры — без позиции каретки */ }
+  }
+}, 300));
+
 document.addEventListener('click', function (ev) {
   var sel = function (s) { return ev.target.closest(s); };
 
@@ -418,6 +497,21 @@ document.addEventListener('click', function (ev) {
   if (clTab) {
     CL_TAB = clTab.getAttribute('data-cl-tab');
     if (CL_TAB !== 'card') state.clientId = null;
+    render();
+    return;
+  }
+
+  // Очистка live-поиска (Этап 38).
+  var clearSearchBtn = sel('[data-clear-search]');
+  if (clearSearchBtn) {
+    CL_SEARCH = '';
+    render();
+    return;
+  }
+
+  var clearSupTabBtn = sel('[data-clear-sup-tab-search]');
+  if (clearSupTabBtn) {
+    SUP_SEARCH = '';
     render();
     return;
   }
@@ -578,6 +672,8 @@ window.renderClientsTabs = renderClientsTabs;
 window.renderSuppliersTab = renderSuppliersTab;
 window.renderClientCard = renderClientCard;
 window.renderClientList = renderClientList;
+window.renderClientSearch = renderClientSearch;
+window.renderSupplierSearch = renderSupplierSearch;
 window.renderClientEditModal = renderClientEditModal;
 window.findSimilarClients = findSimilarClients;
 window.normalizeClientName = normalizeClientName;
