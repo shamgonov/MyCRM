@@ -2,7 +2,7 @@
    VERSION обновляется tools/deploy.js (не менять вручную). */
 'use strict';
 
-const VERSION = '0.1.25';
+const VERSION = '0.1.26';
 const CACHE = 'crm2-v' + VERSION;
 
 const PRECACHE = [

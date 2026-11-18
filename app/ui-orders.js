@@ -303,13 +303,17 @@ function renderOrderCard(id) {
       '" data-tab="' + t[0] + '">' + t[1] + '</button>';
   }).join('');
 
+  // Этап 40: тело вкладки собирается в отдельной функции под try/catch —
+  // падение или отсутствие модуля вкладки не должно ронять карточку целиком.
   let body;
-  if (ORD_TAB === 'estimate') body = renderEstimateTab(o);
-  else if (ORD_TAB === 'materials') body = renderShoppingTab(o);
-  else if (ORD_TAB === 'docs') body = (typeof renderDocsTab === 'function') ? renderDocsTab(o) : '<p class="muted">Модуль документов не загружен.</p>';
-  else if (ORD_TAB === 'money') body = (typeof renderMoneyTab === 'function') ? renderMoneyTab(o) : '<p class="muted">Модуль денег не загружен.</p>';
-  else if (ORD_TAB === 'journal') body = renderOrderTabJournal(o);
-  else body = renderOrderTabMain(o);
+  try {
+    body = renderOrderTabBody(o);
+  } catch (err) {
+    if (typeof console !== 'undefined' && console.error) {
+      console.error('ORD_TAB render failed:', ORD_TAB, err);
+    }
+    body = ordTabFailed('Вкладка', err);
+  }
 
   return '<div class="head-row">' +
       '<button class="btn" data-back>←</button>' +
@@ -320,6 +324,48 @@ function renderOrderCard(id) {
     '</div>' +
     '<div class="tabs order-tabs-scroll">' + tabs + '</div>' +
     body;
+}
+
+// Тело активной вкладки карточки (Этап 40). Внешние модули вызываются только
+// через прямой typeof-гард: при рассинхроне кэша SW вместо падения карточки
+// показывается заглушка «модуль недоступен».
+function renderOrderTabBody(o) {
+  if (ORD_TAB === 'estimate') {
+    return (typeof renderEstimateTab === 'function')
+      ? renderEstimateTab(o)
+      : ordTabUnavailable('Смета');
+  }
+  if (ORD_TAB === 'materials') {
+    return (typeof renderShoppingTab === 'function')
+      ? renderShoppingTab(o)
+      : ordTabUnavailable('Материалы');
+  }
+  if (ORD_TAB === 'docs') {
+    return (typeof renderDocsTab === 'function')
+      ? renderDocsTab(o)
+      : ordTabUnavailable('Документы');
+  }
+  if (ORD_TAB === 'money') {
+    return (typeof renderMoneyTab === 'function')
+      ? renderMoneyTab(o)
+      : ordTabUnavailable('Деньги');
+  }
+  // Журнал и «Основное» объявлены в этом же файле — гард не нужен.
+  if (ORD_TAB === 'journal') return renderOrderTabJournal(o);
+  return renderOrderTabMain(o);
+}
+
+// Заглушка вместо падения карточки, если модуль вкладки не загружен (Этап 40).
+function ordTabUnavailable(title) {
+  return '<div class="card"><h4>' + escapeHtml(title) + '</h4>' +
+    '<p class="muted">⚠️ Модуль вкладки временно недоступен. Обновите страницу.</p></div>';
+}
+
+// Заглушка для исключения внутри модуля вкладки (Этап 40).
+function ordTabFailed(title, err) {
+  return '<div class="card"><h4>' + escapeHtml(title) + '</h4>' +
+    '<p class="muted">⚠️ Не удалось отобразить вкладку: ' +
+    escapeHtml(String(err && err.message ? err.message : err)) + '</p></div>';
 }
 
 // Журнал (история) — читаем сразу, она простая.
